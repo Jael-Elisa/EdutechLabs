@@ -1,6 +1,17 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+// Importa el helper
+import 'download_helper.dart';
 
 class TeacherMaterialsScreen extends StatefulWidget {
   const TeacherMaterialsScreen({super.key});
@@ -16,6 +27,8 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
   String? _selectedCourseId;
   bool _isLoading = true;
   bool _isUploading = false;
+  int _currentIndex = 1;
+  final Dio _dio = Dio();
 
   @override
   void initState() {
@@ -31,7 +44,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           .select('*')
           .eq('teacher_id', user!.id)
           .order('created_at', ascending: false);
-      
+
       setState(() {
         _myCourses = List<Map<String, dynamic>>.from(response);
         if (_myCourses.isNotEmpty) {
@@ -43,6 +56,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      print('Error loading courses: $e');
     }
   }
 
@@ -53,72 +67,136 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           .select('*')
           .eq('course_id', courseId)
           .order('created_at', ascending: false);
-      
+
       setState(() {
         _materials = List<Map<String, dynamic>>.from(response);
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
+      print('Error loading materials: $e');
+    }
+  }
+
+  // Navegación del bottom navigation bar
+  void _onItemTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+
+    switch (index) {
+      case 0: // Cursos
+        context.go('/teacher/courses');
+        break;
+      case 1: // Materiales (ya estamos aquí)
+        break;
+      case 2: // Perfil
+        context.go('/profile');
+        break;
     }
   }
 
   Future<void> _uploadMaterial() async {
-  if (_selectedCourseId == null) return;
+    if (_selectedCourseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un curso primero')),
+      );
+      return;
+    }
 
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png', 'mp4'],
-  );
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'rtf',
+          'odt',
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'mp4',
+          'avi',
+          'mov',
+          'zip',
+          'rar',
+          'ppt',
+          'pptx',
+          'xls',
+          'xlsx',
+        ],
+        allowMultiple: false,
+      );
 
-  if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-  setState(() => _isUploading = true);
+      setState(() => _isUploading = true);
 
-  try {
-    final file = result.files.first;
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-    
-    // ✅ CORRECCIÓN: Usar uploadBytes en lugar de upload
-    await _supabase.storage
-        .from('materials')
-        .uploadBinary(
-          'courses/$_selectedCourseId/$fileName', 
-          file.bytes!, // ✅ Esto es Uint8List
+      final file = result.files.first;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final filePath = 'courses/$_selectedCourseId/$fileName';
+
+      print('Starting upload: $fileName - Type: ${file.extension}');
+
+      // Subir el archivo a Supabase Storage
+      if (file.bytes != null) {
+        // Para web/mobile - usar uploadBytes
+        await _supabase.storage
+            .from('materials')
+            .uploadBinary(filePath, file.bytes!);
+      } else if (file.path != null) {
+        // Para desktop - usar upload
+        final fileData = File(file.path!);
+        await _supabase.storage.from('materials').upload(filePath, fileData);
+      } else {
+        throw Exception('No file data available');
+      }
+
+      // Obtener URL pública
+      final fileUrl =
+          _supabase.storage.from('materials').getPublicUrl(filePath);
+
+      print('File uploaded successfully: $fileUrl');
+
+      // Guardar metadata en la base de datos
+      await _supabase.from('materials').insert({
+        'course_id': _selectedCourseId,
+        'title': file.name,
+        'file_url': fileUrl,
+        'file_type': _getFileType(file.extension ?? 'unknown'),
+        'file_size': file.size,
+        'uploader_id': _supabase.auth.currentUser!.id,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Recargar materiales
+      await _loadMaterials(_selectedCourseId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${file.name}" subido exitosamente'),
+            backgroundColor: Colors.green,
+          ),
         );
-
-    // Obtener URL pública
-    final fileUrl = _supabase.storage
-        .from('materials')
-        .getPublicUrl('courses/$_selectedCourseId/$fileName');
-
-    // Guardar en la base de datos
-    await _supabase.from('materials').insert({
-      'course_id': _selectedCourseId,
-      'title': file.name,
-      'file_url': fileUrl,
-      'file_type': _getFileType(file.extension!),
-      'file_size': file.size,
-    });
-
-    // Recargar materiales
-    await _loadMaterials(_selectedCourseId!);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Material subido exitosamente')),
-      );
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUploading = false);
     }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al subir material: $e')),
-      );
-    }
-  } finally {
-    setState(() => _isUploading = false);
   }
-}
 
   Future<void> _addLinkMaterial() async {
     if (_selectedCourseId == null) return;
@@ -135,11 +213,19 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           children: [
             TextField(
               controller: titleController,
-              decoration: const InputDecoration(labelText: 'Título del material'),
+              decoration: const InputDecoration(
+                labelText: 'Título del material',
+                border: OutlineInputBorder(),
+              ),
             ),
+            const SizedBox(height: 16),
             TextField(
               controller: urlController,
-              decoration: const InputDecoration(labelText: 'URL'),
+              decoration: const InputDecoration(
+                labelText: 'URL',
+                border: OutlineInputBorder(),
+                hintText: 'https://...',
+              ),
             ),
           ],
         ),
@@ -150,15 +236,35 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (titleController.text.isNotEmpty && urlController.text.isNotEmpty) {
-                await _supabase.from('materials').insert({
-                  'course_id': _selectedCourseId,
-                  'title': titleController.text,
-                  'file_url': urlController.text,
-                  'file_type': 'link',
-                });
-                Navigator.pop(context);
-                await _loadMaterials(_selectedCourseId!);
+              if (titleController.text.isNotEmpty &&
+                  urlController.text.isNotEmpty) {
+                try {
+                  await _supabase.from('materials').insert({
+                    'course_id': _selectedCourseId,
+                    'title': titleController.text,
+                    'file_url': urlController.text,
+                    'file_type': 'link',
+                    'uploader_id': _supabase.auth.currentUser!.id,
+                    'created_at': DateTime.now().toIso8601String(),
+                  });
+
+                  Navigator.pop(context);
+                  await _loadMaterials(_selectedCourseId!);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Enlace agregado exitosamente'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al agregar enlace: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Agregar'),
@@ -168,24 +274,357 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     );
   }
 
-  Future<void> _deleteMaterial(String materialId) async {
+  Future<void> _deleteMaterial(String materialId, String fileUrl) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Material'),
+        content: const Text(
+          '¿Estás seguro de que quieres eliminar este material?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
     try {
+      // Eliminar de la base de datos
       await _supabase.from('materials').delete().eq('id', materialId);
+
+      // Si no es un enlace, eliminar también del storage
+      if (!fileUrl.contains('http') || fileUrl.contains('supabase.co')) {
+        try {
+          // Extraer path del file_url y eliminar del storage
+          final uri = Uri.parse(fileUrl);
+          final pathSegments = uri.pathSegments;
+          if (pathSegments.length >= 3) {
+            final storagePath = pathSegments.sublist(2).join('/');
+            await _supabase.storage.from('materials').remove([storagePath]);
+          }
+        } catch (e) {
+          print('Error deleting from storage: $e');
+        }
+      }
+
       await _loadMaterials(_selectedCourseId!);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Material eliminado')),
+          const SnackBar(
+            content: Text('Material eliminado'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al eliminar: $e')),
+          SnackBar(
+            content: Text('Error al eliminar: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
+
+  // NUEVOS MÉTODOS PARA VISUALIZAR MATERIALES
+
+  Future<void> _openMaterial(Map<String, dynamic> material) async {
+    final String fileUrl = material['file_url'];
+    final String title = material['title'] ?? 'Material';
+    final String fileType = material['file_type'];
+
+    // Si es un enlace externo
+    if (fileType == 'link') {
+      await _openLink(fileUrl);
+      return;
+    }
+
+    // Mostrar diálogo de opciones para archivos
+    final action = await showDialog<MaterialAction>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getFileIcon(fileType),
+              size: 64,
+              color: _getFileColor(fileType),
+            ),
+            const SizedBox(height: 16),
+            Text(_getFileTypeDescription(fileType)),
+            const SizedBox(height: 8),
+            if (material['file_size'] != null)
+              Text('Tamaño: ${_formatFileSize(material['file_size'])}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, MaterialAction.view),
+            child: const Text('Ver en Navegador'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, MaterialAction.download),
+            child: const Text('Descargar'),
+          ),
+        ],
+      ),
+    );
+
+    if (action == MaterialAction.view) {
+      await _viewInBrowser(fileUrl);
+    } else if (action == MaterialAction.download) {
+      await _downloadAndOpenFile(fileUrl, title, fileType);
+    }
+  }
+
+  Future<void> _openLink(String url) async {
+    final uri = Uri.parse(url);
+
+    if (!await launchUrl(uri)) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('No se pudo abrir: $url')));
+      }
+    }
+  }
+
+  Future<void> _viewInBrowser(String url) async {
+    final uri = Uri.parse(url);
+
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir en el navegador')),
+        );
+      }
+    }
+  }
+
+  // MÉTODO ACTUALIZADO CON DownloadHelper
+  Future<void> _downloadAndOpenFile(
+    String url,
+    String fileName,
+    String fileType,
+  ) async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Preparando descarga de $fileName...'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      print('🔗 Iniciando descarga desde: $url');
+
+      // 1. Descargar los bytes usando Dio
+      Uint8List bytes;
+      try {
+        final response = await _dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        bytes = Uint8List.fromList(response.data!);
+        print('✅ Bytes descargados: ${bytes.length}');
+      } catch (e) {
+        print('❌ Error descargando bytes: $e');
+        throw Exception('No se pudieron descargar los bytes: $e');
+      }
+
+      // 2. Usar DownloadHelper para manejar la descarga según la plataforma
+      await DownloadHelper.downloadFile(
+        // ← Esta línea ahora funcionará
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: _getMimeType(fileType),
+      );
+
+      // ... (resto del código)
+    } catch (e) {
+      print('Error descargando archivo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al descargar: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Método tradicional para descargar en móvil/desktop
+  Future<void> _traditionalDownload(
+    Uint8List bytes,
+    String fileName,
+    String fileType,
+  ) async {
+    try {
+      // Solicitar permisos de almacenamiento (solo Android/iOS)
+      if (Platform.isAndroid || Platform.isIOS) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          if (await Permission.storage.isPermanentlyDenied) {
+            if (mounted) {
+              await showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Permiso necesario'),
+                  content: const Text(
+                    'Se necesita permiso de almacenamiento para guardar archivos. '
+                    'Por favor, habilítalo en la configuración de la app.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => openAppSettings(),
+                      child: const Text('Abrir configuración'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+          throw Exception('Permiso de almacenamiento denegado');
+        }
+      }
+
+      // Obtener directorio de descargas
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = await getExternalStorageDirectory();
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      } else if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        directory = await getDownloadsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('No se pudo obtener directorio de descargas');
+      }
+
+      // Crear carpeta de descargas si no existe
+      final downloadDir = Directory('${directory.path}/EdutechLabs/Materiales');
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+
+      // Limpiar nombre del archivo
+      final cleanFileName = _cleanFileName(fileName);
+      final filePath = '${downloadDir.path}/$cleanFileName';
+
+      // Guardar archivo
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      print('💾 Archivo guardado en: $filePath');
+
+      // Intentar abrir el archivo
+      final result = await OpenFile.open(filePath);
+
+      if (mounted) {
+        if (result.type == ResultType.done) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('"$cleanFileName" descargado y abierto'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Descargado pero no se pudo abrir: ${result.message}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error en descarga tradicional: $e');
+      rethrow;
+    }
+  }
+
+  /// Verificar si estamos en web
+  bool _isWeb() {
+    try {
+      // Intenta acceder a Platform, si falla estamos en web
+      return Platform.environment.containsKey('FLUTTER_WEB') ||
+          (!Platform.isAndroid &&
+              !Platform.isIOS &&
+              !Platform.isWindows &&
+              !Platform.isMacOS &&
+              !Platform.isLinux);
+    } catch (e) {
+      // Si hay error al acceder a Platform, estamos en web
+      return true;
+    }
+  }
+
+  /// Método auxiliar para limpiar nombres de archivo
+  String _cleanFileName(String fileName) {
+    // Reemplazar caracteres inválidos
+    final cleaned = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+
+    // Limitar longitud si es necesario
+    if (cleaned.length > 100) {
+      final extension = cleaned.split('.').last;
+      final name = cleaned.substring(0, 100 - extension.length - 1);
+      return '$name.$extension';
+    }
+
+    return cleaned;
+  }
+
+  /// Obtener MIME type basado en el tipo de archivo
+  String _getMimeType(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'image':
+        return 'image/jpeg';
+      case 'document':
+        return 'application/msword';
+      case 'text':
+        return 'text/plain';
+      case 'video':
+        return 'video/mp4';
+      case 'audio':
+        return 'audio/mpeg';
+      case 'spreadsheet':
+        return 'application/vnd.ms-excel';
+      case 'presentation':
+        return 'application/vnd.ms-powerpoint';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  // MÉTODOS AUXILIARES EXISTENTES
 
   String _getFileType(String extension) {
     switch (extension.toLowerCase()) {
@@ -193,14 +632,36 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
         return 'pdf';
       case 'doc':
       case 'docx':
+      case 'rtf':
+      case 'odt':
         return 'document';
+      case 'txt':
+        return 'text';
+      case 'ppt':
+      case 'pptx':
+        return 'presentation';
+      case 'xls':
+      case 'xlsx':
+        return 'spreadsheet';
       case 'jpg':
-      case 'png':
       case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
         return 'image';
       case 'mp4':
       case 'avi':
+      case 'mov':
+      case 'wmv':
         return 'video';
+      case 'mp3':
+      case 'wav':
+      case 'ogg':
+        return 'audio';
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return 'archive';
       default:
         return 'other';
     }
@@ -211,13 +672,23 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       case 'pdf':
         return Icons.picture_as_pdf;
       case 'document':
-        return Icons.description;
+        return Icons.article;
+      case 'text':
+        return Icons.text_fields;
+      case 'presentation':
+        return Icons.slideshow;
+      case 'spreadsheet':
+        return Icons.table_chart;
       case 'image':
         return Icons.image;
       case 'video':
         return Icons.video_library;
+      case 'audio':
+        return Icons.audiotrack;
       case 'link':
         return Icons.link;
+      case 'archive':
+        return Icons.archive;
       default:
         return Icons.insert_drive_file;
     }
@@ -228,50 +699,127 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       case 'pdf':
         return Colors.red;
       case 'document':
-        return Colors.blue;
-      case 'image':
-        return Colors.green;
-      case 'video':
-        return Colors.purple;
-      case 'link':
+        return Colors.blue.shade700;
+      case 'text':
+        return Colors.blue.shade500;
+      case 'presentation':
         return Colors.orange;
+      case 'spreadsheet':
+        return Colors.green;
+      case 'image':
+        return Colors.purple;
+      case 'video':
+        return Colors.pink;
+      case 'audio':
+        return Colors.teal;
+      case 'link':
+        return Colors.amber;
+      case 'archive':
+        return Colors.brown;
       default:
         return Colors.grey;
+    }
+  }
+
+  String _getFileTypeDescription(String fileType) {
+    switch (fileType) {
+      case 'pdf':
+        return 'Documento PDF';
+      case 'document':
+        return 'Documento Word';
+      case 'text':
+        return 'Archivo de texto';
+      case 'presentation':
+        return 'Presentación';
+      case 'spreadsheet':
+        return 'Hoja de cálculo';
+      case 'image':
+        return 'Imagen';
+      case 'video':
+        return 'Video';
+      case 'audio':
+        return 'Audio';
+      case 'link':
+        return 'Enlace externo';
+      case 'archive':
+        return 'Archivo comprimido';
+      default:
+        return 'Archivo';
+    }
+  }
+
+  String _getFileExtension(String fileName) {
+    try {
+      return fileName.split('.').last.toUpperCase();
+    } catch (e) {
+      return 'DESCONOCIDO';
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'Fecha desconocida';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Materiales del Curso'),
+        backgroundColor: const Color(0xFF1A237E),
+        foregroundColor: Colors.white,
+      ),
       floatingActionButton: _myCourses.isNotEmpty
           ? FloatingActionButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.upload_file),
-                        title: const Text('Subir Archivo'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _uploadMaterial();
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.link),
-                        title: const Text('Agregar Enlace'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _addLinkMaterial();
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-              child: const Icon(Icons.add),
+              onPressed: _isUploading
+                  ? null
+                  : () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (context) => SafeArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.upload_file),
+                                title: const Text('Subir Archivo'),
+                                subtitle: const Text(
+                                  'Word, PDF, PowerPoint, Excel, etc.',
+                                ),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _uploadMaterial();
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.link),
+                                title: const Text('Agregar Enlace'),
+                                subtitle: const Text(
+                                  'Enlace a recursos externos',
+                                ),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _addLinkMaterial();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+              child: _isUploading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Icon(Icons.add),
             )
           : null,
       body: _isLoading
@@ -282,33 +830,36 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                 if (_myCourses.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child:// En la parte del DropdownButtonFormField, cambia esto:
-                      DropdownButtonFormField<String>(
-                        value: _selectedCourseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Seleccionar Curso',
-                          border: OutlineInputBorder(),
-                        ),
-                        // ✅ CORRECCIÓN: Especificar el tipo explícitamente
-                        items: _myCourses.map<DropdownMenuItem<String>>((course) {
-                          return DropdownMenuItem<String>(
-                            value: course['id'] as String, // ✅ Cast explícito
-                            child: Text(course['title'] as String),
-                          );
-                        }).toList(),
-                        onChanged: (String? courseId) { // ✅ Tipo nullable String
-                          if (courseId != null) {
-                            setState(() {
-                              _selectedCourseId = courseId;
-                              _isLoading = true;
-                            });
-                            _loadMaterials(courseId);
-                          }
-                        },
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _selectedCourseId,
+                      decoration: const InputDecoration(
+                        labelText: 'Seleccionar Curso',
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
                       ),
+                      items: _myCourses.map<DropdownMenuItem<String>>((course) {
+                        return DropdownMenuItem<String>(
+                          value: course['id'] as String,
+                          child: Text(
+                            course['title'] as String,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? courseId) {
+                        if (courseId != null) {
+                          setState(() {
+                            _selectedCourseId = courseId;
+                            _isLoading = true;
+                          });
+                          _loadMaterials(courseId);
+                        }
+                      },
+                    ),
                   ),
                 ],
-                
+
                 // Lista de materiales
                 Expanded(
                   child: _myCourses.isEmpty
@@ -316,13 +867,19 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.library_books, size: 64, color: Colors.grey),
+                              Icon(
+                                Icons.library_books,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
                               SizedBox(height: 16),
                               Text(
                                 'No tienes cursos creados',
                                 style: TextStyle(fontSize: 18),
                               ),
-                              Text('Crea un curso primero para agregar materiales'),
+                              Text(
+                                'Crea un curso primero para agregar materiales',
+                              ),
                             ],
                           ),
                         )
@@ -333,53 +890,129 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.library_books, size: 64, color: Colors.grey),
+                                      Icon(
+                                        Icons.library_books,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
                                       SizedBox(height: 16),
                                       Text(
                                         'No hay materiales',
                                         style: TextStyle(fontSize: 18),
                                       ),
-                                      Text('Agrega el primer material a este curso'),
+                                      Text(
+                                          'Agrega el primer material a este curso'),
                                     ],
                                   ),
                                 )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  itemCount: _materials.length,
-                                  itemBuilder: (context, index) {
-                                    final material = _materials[index];
-                                    return Card(
-                                      child: ListTile(
-                                        leading: Icon(
-                                          _getFileIcon(material['file_type']),
-                                          color: _getFileColor(material['file_type']),
-                                          size: 32,
+                              : RefreshIndicator(
+                                  onRefresh: () =>
+                                      _loadMaterials(_selectedCourseId!),
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.all(16),
+                                    itemCount: _materials.length,
+                                    itemBuilder: (context, index) {
+                                      final material = _materials[index];
+                                      return Card(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 8),
+                                        child: ListTile(
+                                          leading: Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color: _getFileColor(
+                                                material['file_type'],
+                                              ).withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: _getFileColor(
+                                                  material['file_type'],
+                                                ).withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              _getFileIcon(
+                                                  material['file_type']),
+                                              color: _getFileColor(
+                                                material['file_type'],
+                                              ),
+                                              size: 28,
+                                            ),
+                                          ),
+                                          title: Text(
+                                            material['title'] ?? 'Sin título',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          subtitle: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _getFileTypeDescription(
+                                                  material['file_type'],
+                                                ),
+                                              ),
+                                              if (material['file_size'] != null)
+                                                Text(
+                                                  '${_formatFileSize(material['file_size'])} • ${_getFileExtension(material['title'] ?? '')}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              if (material['created_at'] !=
+                                                  null)
+                                                Text(
+                                                  'Subido: ${_formatDate(material['created_at'])}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.open_in_new,
+                                                  color: Colors.blue,
+                                                ),
+                                                onPressed: () =>
+                                                    _openMaterial(material),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.delete,
+                                                  color: Colors.red,
+                                                ),
+                                                onPressed: () =>
+                                                    _deleteMaterial(
+                                                  material['id'],
+                                                  material['file_url'],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                        title: Text(material['title'] ?? 'Sin título'),
-                                        subtitle: Text(
-                                          material['file_type'] == 'link'
-                                              ? 'Enlace externo'
-                                              : 'Tipo: ${material['file_type']}',
-                                        ),
-                                        trailing: IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.red),
-                                          onPressed: () => _deleteMaterial(material['id']),
-                                        ),
-                                        onTap: () {
-                                          // Abrir material
-                                          if (material['file_type'] == 'link') {
-                                            // Abrir enlace web
-                                          } else {
-                                            // Ver archivo
-                                          }
-                                        },
-                                      ),
-                                    );
-                                  },
+                                      );
+                                    },
+                                  ),
                                 ),
                 ),
               ],
             ),
     );
   }
+}
+
+enum MaterialAction {
+  view,
+  download,
+  cancel,
 }
