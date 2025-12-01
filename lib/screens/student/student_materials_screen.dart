@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math'; // ✅ Agregar este import
+import 'package:url_launcher/url_launcher.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+import 'package:permission_handler/permission_handler.dart'; // Opcional
 
 class StudentMaterialsScreen extends StatefulWidget {
   const StudentMaterialsScreen({super.key});
@@ -12,7 +17,7 @@ class StudentMaterialsScreen extends StatefulWidget {
 class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _enrolledCourses = [];
-  Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
+  final Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
   bool _isLoading = true;
   String? _selectedCourseId;
 
@@ -28,9 +33,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       if (user == null) return;
 
       // Cargar cursos en los que está inscrito el estudiante
-      final response = await _supabase
-          .from('enrollments')
-          .select('''
+      final response = await _supabase.from('enrollments').select('''
             course_id,
             courses!inner (
               id,
@@ -40,9 +43,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
               teacher_id,
               created_at
             )
-          ''')
-          .eq('student_id', user.id)
-          .eq('status', 'active');
+          ''').eq('student_id', user.id).eq('status', 'active');
 
       setState(() {
         _enrolledCourses = List<Map<String, dynamic>>.from(response);
@@ -64,9 +65,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       setState(() => _isLoading = true);
 
       // Consulta simplificada sin la relación con uploader_id
-      final materials = await _supabase
-          .from('materials')
-          .select('''
+      final materials = await _supabase.from('materials').select('''
             id,
             title,
             description,
@@ -75,9 +74,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             file_size,
             created_at,
             uploader_id
-          ''')
-          .eq('course_id', courseId)
-          .order('created_at', ascending: false);
+          ''').eq('course_id', courseId).order('created_at', ascending: false);
 
       setState(() {
         _courseMaterials[courseId] = List<Map<String, dynamic>>.from(materials);
@@ -269,106 +266,106 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _enrolledCourses.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.school, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'No estás inscrito en ningún curso',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.school, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'No estás inscrito en ningún curso',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Inscríbete en cursos para ver los materiales',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Inscríbete en cursos para ver los materiales',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                // Selector de cursos
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.grey.shade50,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _selectedCourseId,
-                    decoration: const InputDecoration(
-                      labelText: 'Seleccionar Curso',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white,
+                )
+              : Column(
+                  children: [
+                    // Selector de cursos
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      color: Colors.grey.shade50,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedCourseId,
+                        decoration: const InputDecoration(
+                          labelText: 'Seleccionar Curso',
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        items: _enrolledCourses.map((enrollment) {
+                          final course = enrollment['courses'];
+                          return DropdownMenuItem<String>(
+                            value: enrollment['course_id'].toString(),
+                            child: Text(
+                              course['title'] ?? 'Curso sin título',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (courseId) {
+                          if (courseId != null) {
+                            setState(() => _selectedCourseId = courseId);
+                            _loadCourseMaterials(courseId);
+                          }
+                        },
+                      ),
                     ),
-                    items: _enrolledCourses.map((enrollment) {
-                      final course = enrollment['courses'];
-                      return DropdownMenuItem<String>(
-                        value: enrollment['course_id'].toString(),
-                        child: Text(
-                          course['title'] ?? 'Curso sin título',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (courseId) {
-                      if (courseId != null) {
-                        setState(() => _selectedCourseId = courseId);
-                        _loadCourseMaterials(courseId);
-                      }
-                    },
-                  ),
-                ),
 
-                // Materiales del curso seleccionado
-                Expanded(
-                  child:
-                      _selectedCourseId == null ||
-                          _courseMaterials[_selectedCourseId] == null ||
-                          _courseMaterials[_selectedCourseId]!.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.library_books,
-                                size: 64,
-                                color: Colors.grey,
+                    // Materiales del curso seleccionado
+                    Expanded(
+                      child: _selectedCourseId == null ||
+                              _courseMaterials[_selectedCourseId] == null ||
+                              _courseMaterials[_selectedCourseId]!.isEmpty
+                          ? const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.library_books,
+                                    size: 64,
+                                    color: Colors.grey,
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'No hay materiales disponibles',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'El profesor aún no ha subido materiales para este curso',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 16),
-                              Text(
-                                'No hay materiales disponibles',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey,
-                                ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: () =>
+                                  _loadCourseMaterials(_selectedCourseId!),
+                              child: ListView.builder(
+                                itemCount:
+                                    _courseMaterials[_selectedCourseId]!.length,
+                                itemBuilder: (context, index) {
+                                  final material = _courseMaterials[
+                                      _selectedCourseId]![index];
+                                  return _buildMaterialItem(material);
+                                },
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                'El profesor aún no ha subido materiales para este curso',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: () =>
-                              _loadCourseMaterials(_selectedCourseId!),
-                          child: ListView.builder(
-                            itemCount:
-                                _courseMaterials[_selectedCourseId]!.length,
-                            itemBuilder: (context, index) {
-                              final material =
-                                  _courseMaterials[_selectedCourseId]![index];
-                              return _buildMaterialItem(material);
-                            },
-                          ),
-                        ),
+                            ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 }

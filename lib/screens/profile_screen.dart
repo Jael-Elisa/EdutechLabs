@@ -25,12 +25,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfile() async {
     try {
       final user = _supabase.auth.currentUser;
-      final response = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', user!.id)
-          .single();
-      
+      final response =
+          await _supabase.from('profiles').select().eq('id', user!.id).single();
+
       setState(() {
         _profile = response;
         _isLoading = false;
@@ -73,11 +70,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Center(
                     child: Chip(
                       label: Text(
-                        authProvider.userRole == 'teacher' ? 'Docente' : 'Estudiante',
+                        authProvider.userRole == 'teacher'
+                            ? 'Docente'
+                            : 'Estudiante',
                         style: const TextStyle(color: Colors.white),
                       ),
-                      backgroundColor: authProvider.userRole == 'teacher' 
-                          ? Colors.blue 
+                      backgroundColor: authProvider.userRole == 'teacher'
+                          ? Colors.blue
                           : Colors.green,
                     ),
                   ),
@@ -93,11 +92,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: ListTile(
                       leading: const Icon(Icons.calendar_today),
                       title: const Text('Miembro desde'),
-                      subtitle: Text(
-                        _profile?['created_at'] != null 
-                            ? '${_profile!['created_at'].toString().substring(0, 10)}'
-                            : 'Fecha no disponible'
-                      ),
+                      subtitle: Text(_profile?['created_at'] != null
+                          ? _profile!['created_at'].toString().substring(0, 10)
+                          : 'Fecha no disponible'),
                     ),
                   ),
                   if (_profile?['bio'] != null) ...[
