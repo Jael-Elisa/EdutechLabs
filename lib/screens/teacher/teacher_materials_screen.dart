@@ -9,8 +9,9 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../video_player_screen.dart';
 
-// Importa el helper
+// Helper para descargas (necesitas crearlo)
 import 'download_helper.dart';
 
 class TeacherMaterialsScreen extends StatefulWidget {
@@ -24,10 +25,12 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _myCourses = [];
   List<Map<String, dynamic>> _materials = [];
+  List<Map<String, dynamic>> _filteredMaterials = [];
   String? _selectedCourseId;
   bool _isLoading = true;
   bool _isUploading = false;
   int _currentIndex = 1;
+  final TextEditingController _searchController = TextEditingController();
   final Dio _dio = Dio();
 
   @override
@@ -70,12 +73,32 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
 
       setState(() {
         _materials = List<Map<String, dynamic>>.from(response);
+        _filteredMaterials = _materials;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       print('Error loading materials: $e');
     }
+  }
+
+  void _searchMaterial(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredMaterials = _materials;
+      } else {
+        _filteredMaterials = _materials.where((m) {
+          final title = m['title']?.toString().toLowerCase() ?? '';
+          final type = m['file_type']?.toString().toLowerCase() ?? '';
+          final description =
+              _getFileTypeDescription(m['file_type']).toLowerCase();
+
+          return title.contains(query.toLowerCase()) ||
+              type.contains(query.toLowerCase()) ||
+              description.contains(query.toLowerCase());
+        }).toList();
+      }
+    });
   }
 
   // Navegación del bottom navigation bar
@@ -143,12 +166,10 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
 
       // Subir el archivo a Supabase Storage
       if (file.bytes != null) {
-        // Para web/mobile - usar uploadBytes
         await _supabase.storage
             .from('materials')
             .uploadBinary(filePath, file.bytes!);
       } else if (file.path != null) {
-        // Para desktop - usar upload
         final fileData = File(file.path!);
         await _supabase.storage.from('materials').upload(filePath, fileData);
       } else {
@@ -308,7 +329,6 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       // Si no es un enlace, eliminar también del storage
       if (!fileUrl.contains('http') || fileUrl.contains('supabase.co')) {
         try {
-          // Extraer path del file_url y eliminar del storage
           final uri = Uri.parse(fileUrl);
           final pathSegments = uri.pathSegments;
           if (pathSegments.length >= 3) {
@@ -342,7 +362,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     }
   }
 
-  // NUEVOS MÉTODOS PARA VISUALIZAR MATERIALES
+  // MÉTODOS PARA VER MATERIALES
 
   Future<void> _openMaterial(Map<String, dynamic> material) async {
     final String fileUrl = material['file_url'];
@@ -355,7 +375,18 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       return;
     }
 
-    // Mostrar diálogo de opciones para archivos
+    // Si es un video, abrir en el reproductor
+    if (fileType == 'video') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerScreen(url: fileUrl),
+        ),
+      );
+      return;
+    }
+
+    // Mostrar diálogo de opciones para otros archivos
     final action = await showDialog<MaterialAction>(
       context: context,
       builder: (context) => AlertDialog(
@@ -384,6 +415,10 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
             onPressed: () => Navigator.pop(context, MaterialAction.download),
             child: const Text('Descargar'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, MaterialAction.cancel),
+            child: const Text('Cancelar'),
+          ),
         ],
       ),
     );
@@ -395,14 +430,42 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     }
   }
 
+  // Método específico para descargar (similar al primer código)
+  Future<void> _downloadAndSave(String url, String fileName) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final cleanFileName = _cleanFileName(fileName);
+      final filePath = '${dir.path}/$cleanFileName';
+
+      final response = await _dio.get(
+        url,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      final file = await File(filePath).writeAsBytes(response.data);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Archivo guardado en: ${file.path}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar el archivo: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _openLink(String url) async {
     final uri = Uri.parse(url);
 
     if (!await launchUrl(uri)) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('No se pudo abrir: $url')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo abrir: $url')),
+        );
       }
     }
   }
@@ -419,7 +482,6 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     }
   }
 
-  // MÉTODO ACTUALIZADO CON DownloadHelper
   Future<void> _downloadAndOpenFile(
     String url,
     String fileName,
@@ -451,15 +513,12 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
         throw Exception('No se pudieron descargar los bytes: $e');
       }
 
-      // 2. Usar DownloadHelper para manejar la descarga según la plataforma
+      // 2. Usar DownloadHelper para manejar la descarga
       await DownloadHelper.downloadFile(
-        // ← Esta línea ahora funcionará
         bytes: bytes,
         fileName: fileName,
         mimeType: _getMimeType(fileType),
       );
-
-      // ... (resto del código)
     } catch (e) {
       print('Error descargando archivo: $e');
       if (mounted) {
@@ -569,28 +628,10 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     }
   }
 
-  /// Verificar si estamos en web
-  bool _isWeb() {
-    try {
-      // Intenta acceder a Platform, si falla estamos en web
-      return Platform.environment.containsKey('FLUTTER_WEB') ||
-          (!Platform.isAndroid &&
-              !Platform.isIOS &&
-              !Platform.isWindows &&
-              !Platform.isMacOS &&
-              !Platform.isLinux);
-    } catch (e) {
-      // Si hay error al acceder a Platform, estamos en web
-      return true;
-    }
-  }
-
   /// Método auxiliar para limpiar nombres de archivo
   String _cleanFileName(String fileName) {
-    // Reemplazar caracteres inválidos
     final cleaned = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
 
-    // Limitar longitud si es necesario
     if (cleaned.length > 100) {
       final extension = cleaned.split('.').last;
       final name = cleaned.substring(0, 100 - extension.length - 1);
@@ -624,7 +665,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     }
   }
 
-  // MÉTODOS AUXILIARES EXISTENTES
+  // MÉTODOS AUXILIARES
 
   String _getFileType(String extension) {
     switch (extension.toLowerCase()) {
@@ -653,6 +694,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       case 'avi':
       case 'mov':
       case 'wmv':
+      case 'mkv':
         return 'video';
       case 'mp3':
       case 'wav':
@@ -852,6 +894,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                           setState(() {
                             _selectedCourseId = courseId;
                             _isLoading = true;
+                            _searchController.clear();
                           });
                           _loadMaterials(courseId);
                         }
@@ -859,6 +902,30 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                     ),
                   ),
                 ],
+
+                // Buscador
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _searchMaterial,
+                    decoration: InputDecoration(
+                      labelText: 'Buscar material...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _searchMaterial('');
+                              },
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
 
                 // Lista de materiales
                 Expanded(
@@ -885,23 +952,30 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                         )
                       : _isUploading
                           ? const Center(child: CircularProgressIndicator())
-                          : _materials.isEmpty
-                              ? const Center(
+                          : _filteredMaterials.isEmpty
+                              ? Center(
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.library_books,
+                                        _searchController.text.isNotEmpty
+                                            ? Icons.search_off
+                                            : Icons.library_books,
                                         size: 64,
                                         color: Colors.grey,
                                       ),
-                                      SizedBox(height: 16),
+                                      const SizedBox(height: 16),
                                       Text(
-                                        'No hay materiales',
-                                        style: TextStyle(fontSize: 18),
+                                        _searchController.text.isNotEmpty
+                                            ? 'No se encontraron materiales'
+                                            : 'No hay materiales',
+                                        style: const TextStyle(fontSize: 18),
                                       ),
                                       Text(
-                                          'Agrega el primer material a este curso'),
+                                        _searchController.text.isNotEmpty
+                                            ? 'Intenta con otra búsqueda'
+                                            : 'Agrega el primer material a este curso',
+                                      ),
                                     ],
                                   ),
                                 )
@@ -910,9 +984,10 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                       _loadMaterials(_selectedCourseId!),
                                   child: ListView.builder(
                                     padding: const EdgeInsets.all(16),
-                                    itemCount: _materials.length,
+                                    itemCount: _filteredMaterials.length,
                                     itemBuilder: (context, index) {
-                                      final material = _materials[index];
+                                      final material =
+                                          _filteredMaterials[index];
                                       return Card(
                                         margin:
                                             const EdgeInsets.only(bottom: 8),
@@ -978,14 +1053,34 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                           trailing: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
+                                              // Botón para abrir/ver
                                               IconButton(
-                                                icon: const Icon(
-                                                  Icons.open_in_new,
+                                                icon: Icon(
+                                                  material['file_type'] ==
+                                                          'video'
+                                                      ? Icons.play_arrow
+                                                      : Icons.open_in_new,
                                                   color: Colors.blue,
                                                 ),
                                                 onPressed: () =>
                                                     _openMaterial(material),
                                               ),
+                                              // Botón para descargar (si no es enlace)
+                                              if (material['file_type'] !=
+                                                  'link')
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.download,
+                                                    color: Colors.green,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _downloadAndSave(
+                                                    material['file_url'],
+                                                    material['title'] ??
+                                                        'archivo',
+                                                  ),
+                                                ),
+                                              // Botón para eliminar
                                               IconButton(
                                                 icon: const Icon(
                                                   Icons.delete,
@@ -999,6 +1094,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                               ),
                                             ],
                                           ),
+                                          onTap: () => _openMaterial(material),
                                         ),
                                       );
                                     },
@@ -1007,6 +1103,24 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                 ),
               ],
             ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.school),
+            label: 'Mis Cursos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.library_books),
+            label: 'Materiales',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Perfil',
+          ),
+        ],
+      ),
     );
   }
 }

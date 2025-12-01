@@ -40,6 +40,9 @@ dependencies:
   # Supabase
   supabase_flutter: ^2.1.2
 
+  video_player: ^2.6.0
+  
+
   # Routing
   go_router: ^12.1.3
 
