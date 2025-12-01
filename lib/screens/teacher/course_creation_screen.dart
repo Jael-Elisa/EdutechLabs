@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CourseCreationScreen extends StatefulWidget {
   const CourseCreationScreen({super.key});
@@ -13,26 +14,63 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
   final _courseNameController = TextEditingController();
   final _courseDescriptionController = TextEditingController();
   final _courseCodeController = TextEditingController();
+  final _courseCategoryController = TextEditingController();
   bool _isLoading = false;
+
+  final SupabaseClient supabase = Supabase.instance.client;
 
   Future<void> _createCourse() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    // Simular creación de curso
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Obtener el ID del usuario actual (profesor)
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Debes iniciar sesión para crear un curso'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
 
-    setState(() => _isLoading = false);
+      // Insertar el curso en la base de datos
+      await supabase.from('courses').insert({
+        'title': _courseNameController.text.trim(),
+        'description': _courseDescriptionController.text.trim(),
+        'category': _courseCategoryController.text.trim(),
+        'teacher_id': user.id,
+      }).select();
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Curso creado exitosamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      context.pop();
+      setState(() => _isLoading = false);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Curso creado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // ✅ Navegar a teacher_courses_screen
+        context.go('/teacher/courses');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al crear el curso: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -43,7 +81,7 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
         title: const Text('Crear Nuevo Curso'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: _isLoading ? null : () => context.pop(),
+          onPressed: _isLoading ? null : () => context.go('/teacher/courses'),
         ),
       ),
       body: Padding(
@@ -52,18 +90,11 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              const Icon(
-                Icons.library_add,
-                size: 60,
-                color: Colors.blue,
-              ),
+              const Icon(Icons.library_add, size: 60, color: Colors.blue),
               const SizedBox(height: 20),
               const Text(
                 'Crear Nuevo Curso',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
@@ -93,6 +124,22 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Por favor ingresa el código del curso';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _courseCategoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Categoría',
+                  prefixIcon: Icon(Icons.category),
+                  border: OutlineInputBorder(),
+                  hintText: 'Ej: Matemáticas, Programación, etc.',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor ingresa la categoría del curso';
                   }
                   return null;
                 },
@@ -141,6 +188,7 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
     _courseNameController.dispose();
     _courseDescriptionController.dispose();
     _courseCodeController.dispose();
+    _courseCategoryController.dispose();
     super.dispose();
   }
 }
