@@ -13,6 +13,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _myCourses = [];
   List<Map<String, dynamic>> _materials = [];
+  List<Map<String, dynamic>> _filtered = [];
   String? _selectedCourseId;
   bool _isLoading = true;
   bool _isUploading = false;
@@ -55,12 +56,25 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           .order('created_at', ascending: false);
       
       setState(() {
-        _materials = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
+      _materials = List<Map<String, dynamic>>.from(response);
+      _filtered = _materials;   // <-- NECESARIO
+      _isLoading = false;
+    });
+
     } catch (e) {
       setState(() => _isLoading = false);
     }
+  }
+
+  void _searchMaterial(String query) {
+    setState(() {
+      _filtered = _materials.where((m) {
+        final title = m['title']?.toLowerCase() ?? '';
+        final type = m['file_type']?.toLowerCase() ?? '';
+        return title.contains(query.toLowerCase()) ||
+               type.contains(query.toLowerCase());
+      }).toList();
+    });
   }
 
   Future<void> _uploadMaterial() async {
@@ -309,6 +323,20 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                   ),
                 ],
                 
+                // Buscador 🔍
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: TextField(
+                    onChanged: _searchMaterial,
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar material...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
                 // Lista de materiales
                 Expanded(
                   child: _myCourses.isEmpty
@@ -345,9 +373,9 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                 )
                               : ListView.builder(
                                   padding: const EdgeInsets.all(16),
-                                  itemCount: _materials.length,
+                                  itemCount: _filtered.length,
                                   itemBuilder: (context, index) {
-                                    final material = _materials[index];
+                                    final material = _filtered[index];
                                     return Card(
                                       child: ListTile(
                                         leading: Icon(
