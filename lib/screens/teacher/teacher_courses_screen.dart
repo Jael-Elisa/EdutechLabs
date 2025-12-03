@@ -21,8 +21,8 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _filteredCourses = [];
-  Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
-  Map<String, bool> _expandedCourses = {};
+  final Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
+  final Map<String, bool> _expandedCourses = {};
   bool _isLoading = true;
   int _currentIndex = 0;
   final TextEditingController _searchController = TextEditingController();
@@ -724,7 +724,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                   _openMaterial(material),
                                             ),
                                           );
-                                        }).toList(),
+                                        }),
                                       Padding(
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 16, vertical: 8),

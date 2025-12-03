@@ -86,7 +86,7 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
             value: materialId,
           ),
           callback: (payload) async {
-            final newId = payload.newRecord?['id'] as String?;
+            final newId = payload.newRecord['id'] as String?;
             if (newId == null) return;
 
             final alreadyExists = _comments.any((c) => c['id'] == newId);

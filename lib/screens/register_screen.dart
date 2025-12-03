@@ -20,8 +20,101 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  
+  // Variables para controlar qué validaciones mostrar
+  bool _showLengthError = false;
+  bool _showUppercaseError = false;
+  bool _showLowercaseError = false;
+  bool _showNumberError = false;
+  bool _showSpecialCharError = false;
+
+  // Función para validar la contraseña y actualizar los estados de error
+  void _validatePasswordOnType(String value) {
+    setState(() {
+      _showLengthError = value.isNotEmpty && value.length < 8;
+      _showUppercaseError = value.isNotEmpty && !value.contains(RegExp(r'[A-Z]'));
+      _showLowercaseError = value.isNotEmpty && !value.contains(RegExp(r'[a-z]'));
+      _showNumberError = value.isNotEmpty && !value.contains(RegExp(r'[0-9]'));
+      _showSpecialCharError = value.isNotEmpty && !value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+    });
+  }
+
+  // Función para validación final al presionar registrar
+  String? _validatePasswordOnSubmit(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingresa tu contraseña';
+    }
+    
+    // Solo mostrar el primer error encontrado
+    if (value.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return 'Debe contener al menos una letra mayúscula';
+    }
+    
+    if (!value.contains(RegExp(r'[a-z]'))) {
+      return 'Debe contener al menos una letra minúscula';
+    }
+    
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'Debe contener al menos un número';
+    }
+    
+    if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      return 'Debe contener al menos un carácter especial (!@#\$%^&* etc.)';
+    }
+    
+    return null;
+  }
+
+  // Función para mostrar los requisitos de la contraseña mientras se escribe
+  Widget _buildPasswordRequirements() {
+    final hasText = _passwordController.text.isNotEmpty;
+    
+    if (!hasText) return const SizedBox(); // No mostrar nada si no hay texto
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Requisitos de contraseña:',
+          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        if (_showLengthError) _buildRequirementError('Debe tener al menos 8 caracteres'),
+        if (_showUppercaseError) _buildRequirementError('Debe tener al menos una mayúscula (A-Z)'),
+        if (_showLowercaseError) _buildRequirementError('Debe tener al menos una minúscula (a-z)'),
+        if (_showNumberError) _buildRequirementError('Debe tener al menos un número (0-9)'),
+        if (_showSpecialCharError) _buildRequirementError('Debe tener al menos un carácter especial (!@#\$%^&*)'),
+      ],
+    );
+  }
+
+  Widget _buildRequirementError(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4.0, bottom: 2.0),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 14, color: Colors.red.shade600),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.red.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _register() async {
+    // Validar todos los campos
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
@@ -158,6 +251,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
+                onChanged: _validatePasswordOnType,
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
                   prefixIcon: const Icon(Icons.lock),
@@ -171,16 +265,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.next,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu contraseña';
-                  }
-                  if (value.length < 6) {
-                    return 'La contraseña debe tener al menos 6 caracteres';
-                  }
-                  return null;
-                },
+                validator: _validatePasswordOnSubmit,
               ),
+              const SizedBox(height: 8),
+              _buildPasswordRequirements(),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _confirmPasswordController,
@@ -201,6 +289,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Por favor confirma tu contraseña';
+                  }
+                  if (value != _passwordController.text) {
+                    return 'Las contraseñas no coinciden';
                   }
                   return null;
                 },

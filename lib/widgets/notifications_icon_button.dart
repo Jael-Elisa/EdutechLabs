@@ -67,7 +67,6 @@ class _NotificationsIconButtonState extends State<NotificationsIconButton> {
           ),
           callback: (payload) {
             final newRow = payload.newRecord;
-            if (newRow == null) return;
 
             final isRead = newRow['is_read'] == true;
             if (isRead) return;

@@ -80,7 +80,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
           callback: (payload) {
             final newRow = payload.newRecord;
-            if (newRow == null) return;
 
             final alreadyExists =
                 _notifications.any((n) => n['id'] == newRow['id']);

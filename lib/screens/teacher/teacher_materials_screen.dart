@@ -52,7 +52,7 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
           (c) => c['id'] == courseId,
           orElse: () => {},
         );
-        if (course is Map && course['title'] != null) {
+        if (course['title'] != null) {
           courseTitle = course['title'] as String;
         }
       } catch (_) {}

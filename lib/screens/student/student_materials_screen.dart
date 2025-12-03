@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math'; // ✅ Agregar este import
-import 'package:url_launcher/url_launcher.dart';
-import 'package:open_file/open_file.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:dio/dio.dart';
-import 'package:permission_handler/permission_handler.dart'; // Opcional
+// Opcional
 import '../material_comments_screen.dart';
 
 class StudentMaterialsScreen extends StatefulWidget {

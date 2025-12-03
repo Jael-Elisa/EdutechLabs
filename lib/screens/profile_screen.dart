@@ -45,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _supabase.from('profiles').select().eq('id', user.id).single();
 
       setState(() {
-        _profile = response as Map<String, dynamic>;
+        _profile = response;
         _nameController.text = _profile?['full_name'] ?? '';
         _isLoading = false;
       });
@@ -97,7 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .single();
 
       setState(() {
-        _profile = updated as Map<String, dynamic>;
+        _profile = updated;
       });
 
       if (mounted) {
@@ -145,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .single();
 
       setState(() {
-        _profile = updated as Map<String, dynamic>;
+        _profile = updated;
       });
 
       if (mounted) {
