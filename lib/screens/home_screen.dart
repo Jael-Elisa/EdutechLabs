@@ -8,7 +8,6 @@ import 'teacher/course_creation_screen.dart';
 import 'teacher/teacher_materials_screen.dart';
 import 'student/student_courses_screen.dart';
 import 'student/student_materials_screen.dart';
-import 'student/grades_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/notifications_icon_button.dart';
 
@@ -32,7 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _studentScreens = [
     const StudentCoursesScreen(),
     const StudentMaterialsScreen(),
-    const GradesScreen(),
     const ProfileScreen(),
   ];
 
