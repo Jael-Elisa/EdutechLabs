@@ -15,10 +15,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
 
+  RealtimeChannel? _notificationsChannel;
+
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+    _subscribeToRealtimeNotifications();
+  }
+
+  @override
+  void dispose() {
+    _notificationsChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> _loadNotifications() async {
@@ -52,6 +61,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  void _subscribeToRealtimeNotifications() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _notificationsChannel =
+        _supabase.channel('public:notifications:user_${user.id}');
+
+    _notificationsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            final newRow = payload.newRecord;
+            if (newRow == null) return;
+
+            final alreadyExists =
+                _notifications.any((n) => n['id'] == newRow['id']);
+            if (alreadyExists) return;
+
+            if (!mounted) return;
+
+            setState(() {
+              _notifications.insert(0, {
+                'id': newRow['id'],
+                'material_id': newRow['material_id'],
+                'message': newRow['message'],
+                'is_read': newRow['is_read'],
+                'created_at': newRow['created_at'],
+              });
+            });
+          },
+        )
+        .subscribe();
+  }
+
   Future<void> _openMaterialFromNotification(
     Map<String, dynamic> notif,
   ) async {
@@ -61,14 +111,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (materialId == null) return;
 
     try {
-      // 1) Marcar como leída si aún no lo está
       if (notif['is_read'] == false) {
         await _supabase
             .from('notifications')
             .update({'is_read': true}).eq('id', notifId);
       }
-
-      // 2) Traer el material con la info que necesita la pantalla de detalle
       final materialResp = await _supabase.from('materials').select('''
           id,
           course_id,
@@ -83,15 +130,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final material = Map<String, dynamic>.from(materialResp as Map);
 
       if (!mounted) return;
-
-      // 3) Navegar a la pantalla de detalle + comentarios
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => MaterialCommentsScreen(material: material),
         ),
       );
 
-      // 4) Refrescar lista de notificaciones al volver
       if (mounted) _loadNotifications();
     } catch (e) {
       if (mounted) {

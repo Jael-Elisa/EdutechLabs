@@ -12,12 +12,21 @@ class NotificationsIconButton extends StatefulWidget {
 
 class _NotificationsIconButtonState extends State<NotificationsIconButton> {
   final SupabaseClient _supabase = Supabase.instance.client;
+
   int _unreadCount = 0;
+  RealtimeChannel? _notificationsChannel;
 
   @override
   void initState() {
     super.initState();
     _loadUnreadCount();
+    _subscribeToRealtimeNotifications();
+  }
+
+  @override
+  void dispose() {
+    _notificationsChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -34,9 +43,42 @@ class _NotificationsIconButtonState extends State<NotificationsIconButton> {
       setState(() {
         _unreadCount = (resp as List).length;
       });
-    } catch (e) {
+    } catch (_) {
       //
     }
+  }
+
+  void _subscribeToRealtimeNotifications() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _notificationsChannel =
+        _supabase.channel('public:notifications:badge_${user.id}');
+
+    _notificationsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            final newRow = payload.newRecord;
+            if (newRow == null) return;
+
+            final isRead = newRow['is_read'] == true;
+            if (isRead) return;
+
+            if (!mounted) return;
+            setState(() {
+              _unreadCount += 1;
+            });
+          },
+        )
+        .subscribe();
   }
 
   @override
