@@ -8,7 +8,6 @@ import 'teacher/course_creation_screen.dart';
 import 'teacher/teacher_materials_screen.dart';
 import 'student/student_courses_screen.dart';
 import 'student/student_materials_screen.dart';
-import 'student/grades_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _studentScreens = [
     const StudentCoursesScreen(),
     const StudentMaterialsScreen(),
-    const GradesScreen(),
     const ProfileScreen(),
   ];
 
@@ -59,15 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // if (userRole == 'student') const NotificationsIconButton(),
-          // IconButton(
-          //   icon: const Icon(Icons.logout),
-          //   onPressed: () async {
-          //     await authProvider.signOut();
-          //     context.go('/login');
-          //   },
-          // ),
-          // Badge de rol de usuario
+          if (userRole == 'student') const NotificationsIconButton(),
           Container(
             margin: const EdgeInsets.only(right: 16, top: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
