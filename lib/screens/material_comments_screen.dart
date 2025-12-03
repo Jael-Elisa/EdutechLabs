@@ -22,6 +22,7 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
   bool _isLoading = true;
   bool _isSending = false;
   List<Map<String, dynamic>> _comments = [];
+  RealtimeChannel? _commentsChannel;
 
   String get _materialId => widget.material['id'] as String;
   String? get _courseId => widget.material['course_id'] as String?;
@@ -32,10 +33,12 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
   void initState() {
     super.initState();
     _loadComments();
+    _subscribeToRealtimeComments();
   }
 
   @override
   void dispose() {
+    _commentsChannel?.unsubscribe();
     _commentController.dispose();
     super.dispose();
   }
@@ -66,6 +69,50 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
     }
   }
 
+  void _subscribeToRealtimeComments() {
+    final materialId = _materialId;
+
+    _commentsChannel =
+        _supabase.channel('public:comments:material_$materialId');
+
+    _commentsChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'material_id',
+            value: materialId,
+          ),
+          callback: (payload) async {
+            final newId = payload.newRecord?['id'] as String?;
+            if (newId == null) return;
+
+            final alreadyExists = _comments.any((c) => c['id'] == newId);
+            if (alreadyExists) return;
+
+            try {
+              final resp = await _supabase
+                  .from('comments')
+                  .select(
+                    'id, content, created_at, user_id, profiles(full_name, avatar_url)',
+                  )
+                  .eq('id', newId)
+                  .single();
+
+              if (!mounted) return;
+              setState(() {
+                _comments.add(Map<String, dynamic>.from(resp as Map));
+              });
+            } catch (e) {
+              print(e);
+            }
+          },
+        )
+        .subscribe();
+  }
+
   Future<void> _sendComment() async {
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -94,7 +141,8 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
             'user_id': user.id,
             'content': text,
           })
-          .select('id, content, created_at, user_id, profiles(full_name)')
+          .select(
+              'id, content, created_at, user_id, profiles(full_name, avatar_url)')
           .single();
 
       setState(() {
