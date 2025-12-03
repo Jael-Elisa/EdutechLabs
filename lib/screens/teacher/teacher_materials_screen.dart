@@ -13,6 +13,7 @@ import '../video_player_screen.dart';
 
 // Helper para descargas (necesitas crearlo)
 import 'download_helper.dart';
+import '../material_comments_screen.dart';
 
 class TeacherMaterialsScreen extends StatefulWidget {
   const TeacherMaterialsScreen({super.key});
@@ -1157,7 +1158,15 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                               ),
                                             ],
                                           ),
-                                          onTap: () => _openMaterial(material),
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    MaterialCommentsScreen(
+                                                        material: material),
+                                              ),
+                                            );
+                                          },
                                         ),
                                       );
                                     },

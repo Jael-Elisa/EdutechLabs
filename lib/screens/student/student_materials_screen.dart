@@ -6,6 +6,7 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:permission_handler/permission_handler.dart'; // Opcional
+import '../material_comments_screen.dart';
 
 class StudentMaterialsScreen extends StatefulWidget {
   const StudentMaterialsScreen({super.key});
@@ -67,6 +68,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       // Consulta simplificada sin la relación con uploader_id
       final materials = await _supabase.from('materials').select('''
             id,
+            course_id,
             title,
             description,
             file_url,
@@ -247,10 +249,13 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             material['title'] ?? 'archivo',
           ),
         ),
-        onTap: () => _downloadMaterial(
-          material['file_url'] ?? '',
-          material['title'] ?? 'archivo',
-        ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => MaterialCommentsScreen(material: material),
+            ),
+          );
+        },
       ),
     );
   }
