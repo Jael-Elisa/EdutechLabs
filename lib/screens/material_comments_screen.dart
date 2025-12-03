@@ -44,7 +44,9 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
     try {
       final resp = await _supabase
           .from('comments')
-          .select('id, content, created_at, user_id, profiles(full_name)')
+          .select(
+            'id, content, created_at, user_id, profiles(full_name, avatar_url)',
+          )
           .eq('material_id', _materialId)
           .order('created_at', ascending: true);
 
@@ -243,14 +245,23 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
                                 c['profiles'] as Map<String, dynamic>?;
                             final name =
                                 profile?['full_name'] as String? ?? 'Usuario';
+                            final avatarUrl = profile?['avatar_url'] as String?;
                             final content = c['content'] as String? ?? '';
                             final createdAt = c['created_at'];
 
                             return ListTile(
                               leading: CircleAvatar(
-                                child: Text(
-                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                ),
+                                backgroundImage:
+                                    avatarUrl != null && avatarUrl.isNotEmpty
+                                        ? NetworkImage(avatarUrl)
+                                        : null,
+                                child: (avatarUrl == null || avatarUrl.isEmpty)
+                                    ? Text(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : '?',
+                                      )
+                                    : null,
                               ),
                               title: Text(
                                 name,

@@ -208,8 +208,7 @@ class _CourseCommentsScreenState extends State<CourseCommentsScreen> {
 
     final isOwner = comment['user_id'] == user.id;
     final userRole = user.userMetadata?['role']?.toString();
-    final isTeacher =
-        userRole == 'teacher' ||
+    final isTeacher = userRole == 'teacher' ||
         (_currentCourse != null && _currentCourse!['teacher_id'] == user.id);
 
     return isOwner || isTeacher;
@@ -309,7 +308,7 @@ class _CourseCommentsScreenState extends State<CourseCommentsScreen> {
                     maxLines: 3,
                     minLines: 1,
                     onChanged: (value) {
-                      setState(() {}); // Para actualizar el icono de enviar
+                      setState(() {});
                     },
                     onSubmitted: (_) {
                       if (!_isPosting) _postComment();
@@ -334,167 +333,170 @@ class _CourseCommentsScreenState extends State<CourseCommentsScreen> {
 
           const Divider(height: 1),
 
-          // Lista de comentarios
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _currentCourse == null
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'Curso no disponible',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline,
+                                size: 64, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'Curso no disponible',
+                              style:
+                                  TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  )
-                : _comments.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.comment_outlined,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'No hay comentarios aún',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                        Text(
-                          'Sé el primero en comentar',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadComments,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _comments.length,
-                      itemBuilder: (context, index) {
-                        final comment = _comments[index];
-                        final profile = _getSafeProfile(comment);
-                        final userName = _getSafeUserName(profile);
-                        final userRole = _getSafeUserRole(profile);
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Avatar del usuario
-                              CircleAvatar(
-                                backgroundColor: _getRoleColor(
-                                  userRole,
-                                ).withOpacity(0.2),
-                                radius: 20,
-                                child: Text(
-                                  _getUserInitial(userName),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: _getRoleColor(userRole),
-                                  ),
+                      )
+                    : _comments.isEmpty
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.comment_outlined,
+                                  size: 64,
+                                  color: Colors.grey,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No hay comentarios aún',
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.grey),
+                                ),
+                                Text(
+                                  'Sé el primero en comentar',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadComments,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _comments.length,
+                              itemBuilder: (context, index) {
+                                final comment = _comments[index];
+                                final profile = _getSafeProfile(comment);
+                                final userName = _getSafeUserName(profile);
+                                final userRole = _getSafeUserRole(profile);
 
-                              // Contenido del comentario
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  child: Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Header con nombre y rol
-                                      Row(
-                                        children: [
-                                          Text(
-                                            userName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
+                                      CircleAvatar(
+                                        backgroundColor: _getRoleColor(
+                                          userRole,
+                                        ).withOpacity(0.2),
+                                        radius: 20,
+                                        child: Text(
+                                          _getUserInitial(userName),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: _getRoleColor(userRole),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: _getRoleColor(
-                                                userRole,
-                                              ).withOpacity(0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              _getRoleText(userRole),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: _getRoleColor(userRole),
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade50,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
                                           ),
-                                          const Spacer(),
-                                          if (_canDeleteComment(comment))
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.red,
-                                                size: 16,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    userName,
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: _getRoleColor(
+                                                        userRole,
+                                                      ).withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Text(
+                                                      _getRoleText(userRole),
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: _getRoleColor(
+                                                            userRole),
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const Spacer(),
+                                                  if (_canDeleteComment(
+                                                      comment))
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                        color: Colors.red,
+                                                        size: 16,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _deleteComment(
+                                                              comment['id']),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(),
+                                                    ),
+                                                ],
                                               ),
-                                              onPressed: () =>
-                                                  _deleteComment(comment['id']),
-                                              padding: EdgeInsets.zero,
-                                              constraints:
-                                                  const BoxConstraints(),
-                                            ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(height: 4),
-
-                                      // Contenido del comentario
-                                      SelectableText(
-                                        comment['content'] ?? '',
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-
-                                      const SizedBox(height: 4),
-
-                                      // Fecha
-                                      Text(
-                                        _formatDate(comment['created_at']),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
+                                              const SizedBox(height: 4),
+                                              SelectableText(
+                                                comment['content'] ?? '',
+                                                style: const TextStyle(
+                                                    fontSize: 14),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                _formatDate(
+                                                    comment['created_at']),
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                            ],
+                                );
+                              },
+                            ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
           ),
         ],
       ),
