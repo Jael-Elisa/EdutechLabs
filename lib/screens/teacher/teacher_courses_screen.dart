@@ -462,11 +462,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis Cursos'),
-        backgroundColor: const Color(0xFF1A237E),
-        foregroundColor: Colors.white,
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/teacher/create-course'),
         backgroundColor: const Color(0xFF1A237E),
@@ -789,27 +784,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onItemTapped,
-        backgroundColor: const Color(0xFF1A237E),
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.school),
-            label: 'Mis Cursos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_books),
-            label: 'Materiales',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
-        ],
-      ),
     );
   }
 

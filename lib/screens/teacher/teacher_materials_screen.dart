@@ -880,11 +880,6 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Materiales del Curso'),
-        backgroundColor: const Color(0xFF1A237E),
-        foregroundColor: Colors.white,
-      ),
       floatingActionButton: _myCourses.isNotEmpty
           ? FloatingActionButton(
               onPressed: _isUploading
@@ -1175,24 +1170,6 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                 ),
               ],
             ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.school),
-            label: 'Mis Cursos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_books),
-            label: 'Materiales',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
-        ],
-      ),
     );
   }
 }

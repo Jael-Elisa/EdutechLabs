@@ -60,14 +60,14 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          if (userRole == 'student') const NotificationsIconButton(),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authProvider.signOut();
-              context.go('/login');
-            },
-          ),
+          // if (userRole == 'student') const NotificationsIconButton(),
+          // IconButton(
+          //   icon: const Icon(Icons.logout),
+          //   onPressed: () async {
+          //     await authProvider.signOut();
+          //     context.go('/login');
+          //   },
+          // ),
           // Badge de rol de usuario
           Container(
             margin: const EdgeInsets.only(right: 16, top: 12),
