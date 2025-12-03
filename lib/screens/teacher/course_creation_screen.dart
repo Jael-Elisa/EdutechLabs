@@ -227,3 +227,5 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
   ✅ Manejo de usuario no autenticado
   ✅ Navegación correcta
 */
+    
+      
