@@ -269,18 +269,6 @@ class _HomeScreenState extends State<HomeScreen> {
       label: 'Materiales',
     ),
     BottomNavigationBarItem(
-      icon: const Icon(Icons.grade),
-      activeIcon: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.blueAccent.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.grade, color: Colors.blueAccent),
-      ),
-      label: 'Calificaciones',
-    ),
-    BottomNavigationBarItem(
       icon: const Icon(Icons.person),
       activeIcon: Container(
         padding: const EdgeInsets.all(8),
