@@ -10,6 +10,7 @@ import 'student/student_courses_screen.dart';
 import 'student/student_materials_screen.dart';
 import 'student/grades_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/notifications_icon_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,9 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final userRole = authProvider.userRole ?? 'student';
 
     final screens = userRole == 'teacher' ? _teacherScreens : _studentScreens;
-    final bottomNavItems = userRole == 'teacher'
-        ? _teacherBottomNavItems
-        : _studentBottomNavItems;
+    final bottomNavItems =
+        userRole == 'teacher' ? _teacherBottomNavItems : _studentBottomNavItems;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0F1C),
@@ -60,6 +60,14 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          if (userRole == 'student') const NotificationsIconButton(),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await authProvider.signOut();
+              context.go('/login');
+            },
+          ),
           // Badge de rol de usuario
           Container(
             margin: const EdgeInsets.only(right: 16, top: 12),

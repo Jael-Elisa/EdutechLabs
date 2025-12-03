@@ -39,6 +39,48 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
     _loadMyCourses();
   }
 
+  Future<void> _createNotificationsForNewMaterial({
+    required String courseId,
+    required String materialId,
+    required String materialTitle,
+  }) async {
+    try {
+      String courseTitle = 'Curso';
+      try {
+        final course = _myCourses.firstWhere(
+          (c) => c['id'] == courseId,
+          orElse: () => {},
+        );
+        if (course is Map && course['title'] != null) {
+          courseTitle = course['title'] as String;
+        }
+      } catch (_) {}
+      final enrollmentsResp = await _supabase
+          .from('enrollments')
+          .select('student_id')
+          .eq('course_id', courseId)
+          .eq('status', 'active');
+
+      final enrollments =
+          List<Map<String, dynamic>>.from(enrollmentsResp as List);
+
+      if (enrollments.isEmpty) return;
+
+      final rows = enrollments.map((e) {
+        final studentId = e['student_id'];
+        return {
+          'user_id': studentId,
+          'material_id': materialId,
+          'message':
+              'Nuevo material "$materialTitle" en el curso "$courseTitle".',
+        };
+      }).toList();
+      await _supabase.from('notifications').insert(rows);
+    } catch (e) {
+      debugPrint('Error creando notificaciones: $e');
+    }
+  }
+
   Future<void> _loadMyCourses() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -164,7 +206,6 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
 
       print('Starting upload: $fileName - Type: ${file.extension}');
 
-      // Subir el archivo a Supabase Storage
       if (file.bytes != null) {
         await _supabase.storage
             .from('materials')
@@ -176,24 +217,33 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
         throw Exception('No file data available');
       }
 
-      // Obtener URL pública
       final fileUrl =
           _supabase.storage.from('materials').getPublicUrl(filePath);
 
       print('File uploaded successfully: $fileUrl');
 
-      // Guardar metadata en la base de datos
-      await _supabase.from('materials').insert({
-        'course_id': _selectedCourseId,
-        'title': file.name,
-        'file_url': fileUrl,
-        'file_type': _getFileType(file.extension ?? 'unknown'),
-        'file_size': file.size,
-        'uploader_id': _supabase.auth.currentUser!.id,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      final inserted = await _supabase
+          .from('materials')
+          .insert({
+            'course_id': _selectedCourseId,
+            'title': file.name,
+            'file_url': fileUrl,
+            'file_type': _getFileType(file.extension ?? 'unknown'),
+            'file_size': file.size,
+            'uploader_id': _supabase.auth.currentUser!.id,
+            'created_at': DateTime.now().toIso8601String(),
+          })
+          .select('id, title, course_id')
+          .single();
 
-      // Recargar materiales
+      final material = Map<String, dynamic>.from(inserted as Map);
+
+      await _createNotificationsForNewMaterial(
+        courseId: material['course_id'] as String,
+        materialId: material['id'] as String,
+        materialTitle: material['title'] as String? ?? 'Nuevo material',
+      );
+
       await _loadMaterials(_selectedCourseId!);
 
       if (mounted) {
@@ -260,14 +310,27 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
               if (titleController.text.isNotEmpty &&
                   urlController.text.isNotEmpty) {
                 try {
-                  await _supabase.from('materials').insert({
-                    'course_id': _selectedCourseId,
-                    'title': titleController.text,
-                    'file_url': urlController.text,
-                    'file_type': 'link',
-                    'uploader_id': _supabase.auth.currentUser!.id,
-                    'created_at': DateTime.now().toIso8601String(),
-                  });
+                  final inserted = await _supabase
+                      .from('materials')
+                      .insert({
+                        'course_id': _selectedCourseId,
+                        'title': titleController.text.trim(),
+                        'file_url': urlController.text.trim(),
+                        'file_type': 'link',
+                        'uploader_id': _supabase.auth.currentUser!.id,
+                        'created_at': DateTime.now().toIso8601String(),
+                      })
+                      .select('id, title, course_id')
+                      .single();
+
+                  final material = Map<String, dynamic>.from(inserted as Map);
+
+                  await _createNotificationsForNewMaterial(
+                    courseId: material['course_id'] as String,
+                    materialId: material['id'] as String,
+                    materialTitle:
+                        material['title'] as String? ?? 'Nuevo material',
+                  );
 
                   Navigator.pop(context);
                   await _loadMaterials(_selectedCourseId!);

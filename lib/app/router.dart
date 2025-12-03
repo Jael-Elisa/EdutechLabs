@@ -12,6 +12,7 @@ import '../screens/student/student_courses_screen.dart';
 import '../screens/student/student_materials_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/reset_password_screen.dart';
+import '../screens/notifications_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -86,6 +87,11 @@ final router = GoRouter(
       path: '/reset-password',
       name: 'reset_password',
       builder: (context, state) => const ResetPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      name: 'notifications',
+      builder: (context, state) => const NotificationsScreen(),
     ),
   ],
 );
