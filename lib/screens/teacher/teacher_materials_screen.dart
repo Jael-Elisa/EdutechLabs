@@ -162,6 +162,43 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final filePath = 'courses/$_selectedCourseId/$fileName';
 
+      // -------- VALIDACIONES DEL ARCHIVO --------
+
+      // 1. Validar nombre
+      if (fileName.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nombre de archivo inválido')),
+        );
+        return;
+      }
+
+      // 2. Validar tamaño (máximo 50 MB)
+      if (file.size != null && file.size! > 50 * 1024 * 1024) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El archivo supera el límite de 50 MB')),
+        );
+        return;
+      }
+
+      // 3. Validar extensión real
+      final ext = (file.extension ?? '').toLowerCase();
+      const allowedExtensions = [
+        'pdf', 'doc', 'docx', 'txt', 'rtf', 'odt',
+        'jpg', 'jpeg', 'png', 'gif',
+        'mp4', 'avi', 'mov',
+        'zip', 'rar',
+        'ppt', 'pptx',
+        'xls', 'xlsx',
+      ];
+
+      if (!allowedExtensions.contains(ext)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Tipo de archivo no permitido: .$ext')),
+        );
+        return;
+      }
+
+
       print('Starting upload: $fileName - Type: ${file.extension}');
 
       // Subir el archivo a Supabase Storage
@@ -256,36 +293,72 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.isNotEmpty &&
-                  urlController.text.isNotEmpty) {
-                try {
-                  await _supabase.from('materials').insert({
-                    'course_id': _selectedCourseId,
-                    'title': titleController.text,
-                    'file_url': urlController.text,
-                    'file_type': 'link',
-                    'uploader_id': _supabase.auth.currentUser!.id,
-                    'created_at': DateTime.now().toIso8601String(),
-                  });
+           onPressed: () async {
+              final title = titleController.text.trim();
+              final url = urlController.text.trim();
 
-                  Navigator.pop(context);
-                  await _loadMaterials(_selectedCourseId!);
+              // -------- VALIDACIONES DEL LINK --------
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Enlace agregado exitosamente'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error al agregar enlace: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+              // 1. Validar título no vacío
+              if (title.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('El título no puede estar vacío'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              // 2. Validar URL no vacía
+              if (url.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('La URL no puede estar vacía'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              // 3. Validar formato de URL (http o https obligatorio)
+              final urlRegex = RegExp(r'^(https?:\/\/)[^\s]+$');
+              if (!urlRegex.hasMatch(url)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Ingresa una URL válida (debe empezar con http:// o https://)'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await _supabase.from('materials').insert({
+                  'course_id': _selectedCourseId,
+                  'title': title,
+                  'file_url': url,
+                  'file_type': 'link',
+                  'uploader_id': _supabase.auth.currentUser!.id,
+                  'created_at': DateTime.now().toIso8601String(),
+                });
+
+                Navigator.pop(context);
+                await _loadMaterials(_selectedCourseId!);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Enlace agregado exitosamente'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error al agregar enlace: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             child: const Text('Agregar'),
@@ -371,7 +444,17 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
 
     // Si es un enlace externo
     if (fileType == 'link') {
-      await _openLink(fileUrl);
+      final uri = Uri.parse(fileUrl);
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo abrir el enlace')),
+          );
+        }
+      }
       return;
     }
 
@@ -1130,3 +1213,81 @@ enum MaterialAction {
   download,
   cancel,
 }
+
+/*
+✔️ VALIDACIONES DE ARCHIVOS
+
+En _uploadMaterial() tienes:
+
+✅ 1. Validar nombre no vacío
+if (fileName.trim().isEmpty)
+
+✅ 2. Validar tamaño (máx 50 MB)
+file.size! > 50 * 1024 * 1024
+
+✅ 3. Validar extensión permitida
+if (!allowedExtensions.contains(ext))
+
+✔️ Además:
+
+Sanitizas el nombre del archivo
+
+Validas storage
+
+Manejas errores de subida
+
+Validas file.bytes vs file.path
+
+Muestras mensajes de error claros
+
+✔️ VALIDACIONES DE LINKS
+
+En _addLinkMaterial() tienes:
+
+✔️ Título obligatorio
+if (title.isEmpty)
+
+✔️ URL obligatoria
+if (url.isEmpty)
+
+✔️ Validar formato de URL (http:// o https://)
+final urlRegex = RegExp(r'^(https?:\/\/)[^\s]+$');
+
+✔️ Mensajes correctos si falla algo
+✔️ No deja insertar nada incorrecto
+✔️ VALIDACIONES AL ABRIR ARCHIVOS
+
+En _openMaterial():
+
+✔️ Validación para enlaces con canLaunchUrl()
+✔️ Diferenciación por tipo (pdf, image, video, etc.)
+✔️ Manejo de error si no se puede abrir el enlace
+✔️ VALIDACIONES AL DESCARGAR
+✔️ Pedir permisos en Android/iOS
+✔️ Manejar errores de descarga
+✔️ Crear carpetas si no existen
+✔️ Limpieza del nombre del archivo
+✔️ Manejo de errores de almacenamiento
+✔️ VALIDACIONES AL ELIMINAR
+✔️ Confirmación mediante diálogo
+✔️ Eliminar del storage solo si corresponde
+✔️ Manejo de errores
+✔️ Snackbars relevantes
+✔️ VALIDACIONES DE BÚSQUEDA
+✔️ Búsqueda sensible a título + tipo + descripción
+✔️ Limpiar búsqueda
+✔️ Indicador de no encontrado
+✔️ VALIDACIONES DE CURSOS
+✔️ Si no tiene cursos → no permite subir
+✔️ Si selecciona curso nuevo → recarga y resetea búsqueda
+✔️ VALIDACIONES VISUALES / UX
+
+Indicador de cargando
+
+Loading en FAB durante subida
+
+Mensajes de éxito
+
+Mensajes de error
+
+Evitar acciones múltiples cuando está subiendo (_isUploading)*/

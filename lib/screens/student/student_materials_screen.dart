@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:math'; // ✅ Agregar este import
-import 'package:url_launcher/url_launcher.dart';
+import 'dart:math';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
-import 'package:permission_handler/permission_handler.dart'; // Opcional
+import 'package:permission_handler/permission_handler.dart';
 
 class StudentMaterialsScreen extends StatefulWidget {
   const StudentMaterialsScreen({super.key});
@@ -20,6 +19,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
   final Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
   bool _isLoading = true;
   String? _selectedCourseId;
+  bool _isDownloading = false;
 
   @override
   void initState() {
@@ -32,7 +32,6 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Cargar cursos en los que está inscrito el estudiante
       final response = await _supabase.from('enrollments').select('''
             course_id,
             courses!inner (
@@ -45,8 +44,10 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             )
           ''').eq('student_id', user.id).eq('status', 'active');
 
+      if (!mounted) return;
+
       setState(() {
-        _enrolledCourses = List<Map<String, dynamic>>.from(response);
+        _enrolledCourses = List<Map<String, dynamic>>.from(response ?? []);
         if (_enrolledCourses.isNotEmpty) {
           _selectedCourseId = _enrolledCourses.first['course_id'].toString();
           _loadCourseMaterials(_selectedCourseId!);
@@ -55,6 +56,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       _showError('Error al cargar cursos: $e');
     }
@@ -62,9 +64,9 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
 
   Future<void> _loadCourseMaterials(String courseId) async {
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
 
-      // Consulta simplificada sin la relación con uploader_id
       final materials = await _supabase.from('materials').select('''
             id,
             title,
@@ -76,38 +78,107 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             uploader_id
           ''').eq('course_id', courseId).order('created_at', ascending: false);
 
+      if (!mounted) return;
       setState(() {
-        _courseMaterials[courseId] = List<Map<String, dynamic>>.from(materials);
+        _courseMaterials[courseId] = List<Map<String, dynamic>>.from(materials ?? []);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       _showError('Error al cargar materiales: $e');
     }
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
-  void _downloadMaterial(String fileUrl, String fileName) {
-    // Aquí puedes implementar la descarga del archivo
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Descargando: $fileName'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    print('Descargar: $fileUrl');
+  Future<void> _downloadMaterial(String fileUrl, String fileName, {String? fileType}) async {
+    if (_isDownloading) return;
+
+    if (fileUrl.isEmpty) {
+      _showError('El archivo no tiene URL válida.');
+      return;
+    }
+
+    // Validar URL
+    Uri? uri;
+    try {
+      uri = Uri.parse(fileUrl);
+      if (!uri.hasScheme || !(uri.isScheme('http') || uri.isScheme('https'))) {
+        _showError('URL inválida.');
+        return;
+      }
+    } catch (_) {
+      _showError('URL inválida.');
+      return;
+    }
+
+    // Validar extensión/tipo permitidos
+    final allowedExtensions = [
+      'pdf','doc','docx','ppt','pptx','mp4','avi','mov',
+      'jpg','jpeg','png','gif','zip','rar','7z'
+    ];
+    String ext = fileType?.toLowerCase() ?? fileName.split('.').last.toLowerCase();
+    if (!allowedExtensions.contains(ext)) {
+      _showError('Tipo de archivo no permitido: .$ext');
+      return;
+    }
+
+    // Sanitizar nombre de archivo
+    String sanitizedFileName = fileName.replaceAll(RegExp(r'[^\w\s.-]'), '_');
+
+    try {
+      _isDownloading = true;
+
+      // Solicitar permisos de almacenamiento
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        _showError('Permiso de almacenamiento denegado.');
+        _isDownloading = false;
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final savePath = '${tempDir.path}/$sanitizedFileName';
+
+      final dio = Dio();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Descargando $fileName...'), backgroundColor: Colors.green),
+      );
+
+      await dio.download(
+        fileUrl,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            final progress = (received / total * 100).toStringAsFixed(0);
+            // Opcional: mostrar progreso
+          }
+        },
+      );
+
+      final result = await OpenFile.open(savePath);
+      if (result.type != ResultType.done) {
+        _showError('No se pudo abrir el archivo.');
+      }
+    } catch (e) {
+      _showError('Error al descargar o abrir el archivo: $e');
+    } finally {
+      _isDownloading = false;
+    }
   }
 
   String _formatFileSize(int bytes) {
     if (bytes <= 0) return '0 B';
     const suffixes = ['B', 'KB', 'MB', 'GB'];
-    final i = (log(bytes) / log(1024)).floor(); // ✅ log ahora está disponible
-    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}'; // ✅ pow ahora está disponible
+    final i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
   }
 
   String _formatDate(dynamic date) {
@@ -128,44 +199,24 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
     Color color;
 
     switch (fileType) {
-      case 'pdf':
-        icon = Icons.picture_as_pdf;
-        color = Colors.red;
-        break;
+      case 'pdf': icon = Icons.picture_as_pdf; color = Colors.red; break;
       case 'doc':
-      case 'docx':
-        icon = Icons.description;
-        color = Colors.blue;
-        break;
+      case 'docx': icon = Icons.description; color = Colors.blue; break;
       case 'ppt':
-      case 'pptx':
-        icon = Icons.slideshow;
-        color = Colors.orange;
-        break;
+      case 'pptx': icon = Icons.slideshow; color = Colors.orange; break;
       case 'video':
       case 'mp4':
       case 'avi':
-      case 'mov':
-        icon = Icons.video_library;
-        color = Colors.purple;
-        break;
+      case 'mov': icon = Icons.video_library; color = Colors.purple; break;
       case 'image':
       case 'jpg':
       case 'png':
       case 'jpeg':
-      case 'gif':
-        icon = Icons.image;
-        color = Colors.green;
-        break;
+      case 'gif': icon = Icons.image; color = Colors.green; break;
       case 'zip':
       case 'rar':
-      case '7z':
-        icon = Icons.folder_zip;
-        color = Colors.amber;
-        break;
-      default:
-        icon = Icons.insert_drive_file;
-        color = Colors.grey;
+      case '7z': icon = Icons.folder_zip; color = Colors.amber; break;
+      default: icon = Icons.insert_drive_file; color = Colors.grey;
     }
 
     return Card(
@@ -183,73 +234,45 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
           ),
           child: Icon(icon, color: color, size: 28),
         ),
-        title: Text(
-          material['title'] ?? 'Sin título',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+        title: Text(material['title'] ?? 'Sin título', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (material['description'] != null) ...[
-              Text(
-                material['description']!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade700),
-              ),
+              Text(material['description']!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey.shade700)),
               const SizedBox(height: 4),
             ],
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    fileType.toUpperCase(),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text(fileType.toUpperCase(), style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _formatFileSize(fileSize),
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
+                Text(_formatFileSize(fileSize), style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              'Subido: ${_formatDate(material['created_at'])}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-            ),
+            Text('Subido: ${_formatDate(material['created_at'])}', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
           ],
         ),
         trailing: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
+            decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
             child: const Icon(Icons.download, color: Colors.green),
           ),
           onPressed: () => _downloadMaterial(
             material['file_url'] ?? '',
             material['title'] ?? 'archivo',
+            fileType: material['file_type']?.toString(),
           ),
         ),
         onTap: () => _downloadMaterial(
           material['file_url'] ?? '',
           material['title'] ?? 'archivo',
+          fileType: material['file_type']?.toString(),
         ),
       ),
     );
@@ -272,42 +295,25 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
                     children: [
                       Icon(Icons.school, size: 64, color: Colors.grey),
                       SizedBox(height: 16),
-                      Text(
-                        'No estás inscrito en ningún curso',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
-                      ),
+                      Text('No estás inscrito en ningún curso', style: TextStyle(fontSize: 18, color: Colors.grey)),
                       SizedBox(height: 8),
-                      Text(
-                        'Inscríbete en cursos para ver los materiales',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      Text('Inscríbete en cursos para ver los materiales', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
                     ],
                   ),
                 )
               : Column(
                   children: [
-                    // Selector de cursos
                     Container(
                       padding: const EdgeInsets.all(16),
                       color: Colors.grey.shade50,
                       child: DropdownButtonFormField<String>(
                         initialValue: _selectedCourseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Seleccionar Curso',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
+                        decoration: const InputDecoration(labelText: 'Seleccionar Curso', border: OutlineInputBorder(), filled: true, fillColor: Colors.white),
                         items: _enrolledCourses.map((enrollment) {
                           final course = enrollment['courses'];
                           return DropdownMenuItem<String>(
                             value: enrollment['course_id'].toString(),
-                            child: Text(
-                              course['title'] ?? 'Curso sin título',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text(course['title'] ?? 'Curso sin título', style: const TextStyle(fontWeight: FontWeight.bold)),
                           );
                         }).toList(),
                         onChanged: (courseId) {
@@ -318,49 +324,25 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
                         },
                       ),
                     ),
-
-                    // Materiales del curso seleccionado
                     Expanded(
-                      child: _selectedCourseId == null ||
-                              _courseMaterials[_selectedCourseId] == null ||
-                              _courseMaterials[_selectedCourseId]!.isEmpty
+                      child: _selectedCourseId == null || _courseMaterials[_selectedCourseId] == null || _courseMaterials[_selectedCourseId]!.isEmpty
                           ? const Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.library_books,
-                                    size: 64,
-                                    color: Colors.grey,
-                                  ),
+                                  Icon(Icons.library_books, size: 64, color: Colors.grey),
                                   SizedBox(height: 16),
-                                  Text(
-                                    'No hay materiales disponibles',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
+                                  Text('No hay materiales disponibles', style: TextStyle(fontSize: 18, color: Colors.grey)),
                                   SizedBox(height: 8),
-                                  Text(
-                                    'El profesor aún no ha subido materiales para este curso',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
+                                  Text('El profesor aún no ha subido materiales para este curso', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
                                 ],
                               ),
                             )
                           : RefreshIndicator(
-                              onRefresh: () =>
-                                  _loadCourseMaterials(_selectedCourseId!),
+                              onRefresh: () => _loadCourseMaterials(_selectedCourseId!),
                               child: ListView.builder(
-                                itemCount:
-                                    _courseMaterials[_selectedCourseId]!.length,
-                                itemBuilder: (context, index) {
-                                  final material = _courseMaterials[
-                                      _selectedCourseId]![index];
-                                  return _buildMaterialItem(material);
-                                },
+                                itemCount: _courseMaterials[_selectedCourseId]!.length,
+                                itemBuilder: (context, index) => _buildMaterialItem(_courseMaterials[_selectedCourseId]![index]),
                               ),
                             ),
                     ),
@@ -369,3 +351,20 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
     );
   }
 }
+
+
+/*
+Validaciones que sí tienes
+
+Verificación de que el usuario esté autenticado antes de cargar cursos (user == null).
+
+Manejo de errores con SnackBar en _showError.
+
+Manejo de null para cursos y materiales.
+
+Manejo de cursos vacíos (_enrolledCourses.isEmpty).
+
+Manejo de materiales vacíos (_courseMaterials[_selectedCourseId] == null || isEmpty).
+
+Formato seguro de fechas (_formatDate) y tamaños de archivos (_formatFileSize).
+ */

@@ -21,6 +21,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
+  String? validateStrongPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingresa tu contraseña';
+    }
+    if (value.contains(' ')) {
+      return 'La contraseña no puede contener espacios';
+    }
+    if (value.length < 8) {
+      return 'Debe tener al menos 8 caracteres';
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Debe incluir al menos una letra mayúscula';
+    }
+    if (!RegExp(r'[a-z]').hasMatch(value)) {
+      return 'Debe incluir al menos una letra minúscula';
+    }
+    if (!RegExp(r'\d').hasMatch(value)) {
+      return 'Debe incluir al menos un número';
+    }
+    if (!RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-\\/\[\]=+]').hasMatch(value)) {
+      return 'Debe incluir al menos un símbolo';
+    }
+
+    // OPCIONAL: evitar contraseñas comunes
+    final commonPasswords = ['12345678', 'password', 'qwerty', 'abc123'];
+    if (commonPasswords.contains(value.toLowerCase())) {
+      return 'Esa contraseña es demasiado común, usa otra';
+    }
+
+    return null; // Es válida
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -171,15 +203,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.next,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu contraseña';
-                  }
-                  if (value.length < 6) {
-                    return 'La contraseña debe tener al menos 6 caracteres';
-                  }
-                  return null;
-                },
+                validator: validateStrongPassword,
               ),
               const SizedBox(height: 16),
               TextFormField(

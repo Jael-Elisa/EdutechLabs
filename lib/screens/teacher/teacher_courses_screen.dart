@@ -42,6 +42,11 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   Future<void> _loadCourses() async {
     try {
       final user = _supabase.auth.currentUser;
+        if (user == null) {
+          setState(() => _isLoading = false);
+          return;
+        }
+
       final response = await _supabase
           .from('courses')
           .select('*')
@@ -59,6 +64,13 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
         _loadCourseMaterials(course['id']);
       }
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo cargar cursos. Verifica tu conexión.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
       setState(() => _isLoading = false);
       print('Error loading courses: $e');
     }
@@ -152,9 +164,31 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
   // FUNCIONALIDAD DE VISUALIZAR Y DESCARGAR MATERIALES
   Future<void> _openMaterial(Map<String, dynamic> material) async {
-    final String fileUrl = material['file_url'];
+    if (material['file_url'] == null || material['file_url'].toString().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este archivo no contiene una URL válida')),
+      );
+      return;
+    }
+
+    if (material['file_type'] == null || material['file_type'].toString().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tipo de archivo no especificado')),
+      );
+      return;
+    }
+
+    if (material['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Material inválido')),
+      );
+      return;
+    }
+
+
     final String title = material['title'] ?? 'Material';
     final String fileType = material['file_type'];
+    final String fileUrl = material['file_url'];
 
     // Si es un enlace externo
     if (fileType == 'link') {
@@ -218,7 +252,13 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   Future<void> _openLink(String url) async {
-    final uri = Uri.parse(url);
+   final uri = Uri.tryParse(url);
+    if (uri == null || !uri.isAbsolute) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enlace inválido')),
+      );
+      return;
+    }
     if (!await launchUrl(uri)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -229,7 +269,14 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   Future<void> _viewInBrowser(String url) async {
-    final uri = Uri.parse(url);
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.isAbsolute) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('URL inválida')),
+      );
+      return;
+    }
+
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -239,9 +286,19 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     }
   }
 
+
   Future<void> _downloadAndSave(
       String url, String fileName, String fileType) async {
     try {
+
+      if (url.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('URL de archivo vacía')),
+        );
+        return;
+      }
+
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -252,6 +309,11 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
+
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
       final cleanFileName = _cleanFileName(fileName);
       final filePath = '${dir.path}/$cleanFileName';
 
@@ -259,6 +321,14 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
         url,
         options: Options(responseType: ResponseType.bytes),
       );
+
+      if (response.data == null || (response.data as List).isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El archivo está vacío o corrupto')),
+        );
+        return;
+      }
+
 
       final file = await File(filePath).writeAsBytes(response.data);
 
@@ -323,6 +393,11 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
     try {
       await _supabase.from('materials').delete().eq('id', materialId);
+      if (courseId.isEmpty) {
+      print('Error: courseId vacío');
+      return;
+    }
+
       await _loadCourseMaterials(courseId);
 
       if (mounted) {
@@ -346,6 +421,14 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   void _navigateToCourseMaterials(Map<String, dynamic> course) {
+
+    if (course['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Curso inválido')),
+      );
+      return;
+    }
+
     context.push('/teacher/courses/${course['id']}/materials', extra: course);
   }
 
@@ -853,3 +936,47 @@ enum MaterialAction {
   download,
   cancel,
 }
+
+
+/*
+1. Validación de usuario nulo
+
+✔ Correcta y bien ubicada en _loadCourses().
+
+2. Validación de URL, tipo de archivo e ID de material
+
+✔ Perfectamente colocadas al inicio de _openMaterial().
+
+3. Declaración faltante de fileUrl
+
+✔ Ya agregaste:
+
+final String fileUrl = material['file_url'];
+
+
+Muy bien.
+
+4. Validación de URL en _openLink() y _viewInBrowser()
+
+✔ Implementadas correctamente con Uri.tryParse.
+
+5. Validación de URL vacía en _downloadAndSave()
+
+✔ Correcta.
+
+6. Validación de archivo vacío/corrupto
+
+✔ Perfecta y colocada después de descargar bytes.
+
+7. Validación del directorio antes de guardar
+
+✔ Correcta.
+
+8. Validación de courseId vacío en eliminación de material
+
+✔ Correcta.
+
+9. Validación de curso inválido al navegar
+
+✔ Correcta.
+ */

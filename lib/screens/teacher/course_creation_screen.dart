@@ -13,8 +13,8 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _courseNameController = TextEditingController();
   final _courseDescriptionController = TextEditingController();
-  final _courseCodeController = TextEditingController();
   final _courseCategoryController = TextEditingController();
+  final _courseCodeController = TextEditingController(); // Opcional: solo para mostrar en UI
   bool _isLoading = false;
 
   final SupabaseClient supabase = Supabase.instance.client;
@@ -25,7 +25,7 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Obtener el ID del usuario actual (profesor)
+      // Obtener el usuario actual
       final user = supabase.auth.currentUser;
       if (user == null) {
         if (context.mounted) {
@@ -45,7 +45,7 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
         'title': _courseNameController.text.trim(),
         'description': _courseDescriptionController.text.trim(),
         'category': _courseCategoryController.text.trim(),
-        'teacher_id': user.id,
+        'teacher_id': user.id.toString(),
       }).select();
 
       setState(() => _isLoading = false);
@@ -57,12 +57,10 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // ✅ Navegar a teacher_courses_screen
         context.go('/teacher/courses');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -98,6 +96,7 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
+              // Nombre del curso
               TextFormField(
                 controller: _courseNameController,
                 decoration: const InputDecoration(
@@ -106,29 +105,40 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
+                  if (value == null || value.trim().isEmpty) {
                     return 'Por favor ingresa el nombre del curso';
+                  }
+                  if (value.trim().length < 3) {
+                    return 'El nombre debe tener al menos 3 caracteres';
+                  }
+                  if (value.trim().length > 100) {
+                    return 'El nombre no puede superar los 100 caracteres';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
+              // Código del curso (opcional: solo UI, no se guarda en Supabase)
               TextFormField(
                 controller: _courseCodeController,
                 decoration: const InputDecoration(
-                  labelText: 'Código del Curso',
+                  labelText: 'Código del Curso (opcional)',
                   prefixIcon: Icon(Icons.code),
                   border: OutlineInputBorder(),
                   hintText: 'Ej: MAT-101',
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el código del curso';
+                  if (value != null && value.trim().isNotEmpty) {
+                    final regex = RegExp(r'^[A-Z]{3,5}-\d{3}$');
+                    if (!regex.hasMatch(value.trim().toUpperCase())) {
+                      return 'Formato inválido. Ejemplo: MAT-101';
+                    }
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
+              // Categoría
               TextFormField(
                 controller: _courseCategoryController,
                 decoration: const InputDecoration(
@@ -138,13 +148,20 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
                   hintText: 'Ej: Matemáticas, Programación, etc.',
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa la categoría del curso';
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Por favor ingresa la categoría';
+                  }
+                  if (value.trim().length < 3) {
+                    return 'La categoría debe tener al menos 3 caracteres';
+                  }
+                  if (RegExp(r'[<>"]').hasMatch(value)) {
+                    return 'La categoría contiene caracteres inválidos';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
+              // Descripción
               TextFormField(
                 controller: _courseDescriptionController,
                 decoration: const InputDecoration(
@@ -155,13 +172,20 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
                 ),
                 maxLines: 4,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
+                  if (value == null || value.trim().isEmpty) {
                     return 'Por favor ingresa una descripción';
+                  }
+                  if (value.trim().length < 10) {
+                    return 'La descripción debe tener al menos 10 caracteres';
+                  }
+                  if (value.trim().length > 500) {
+                    return 'La descripción no puede superar los 500 caracteres';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 30),
+              // Botón Crear
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -187,8 +211,19 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
   void dispose() {
     _courseNameController.dispose();
     _courseDescriptionController.dispose();
-    _courseCodeController.dispose();
     _courseCategoryController.dispose();
+    _courseCodeController.dispose();
     super.dispose();
   }
 }
+
+/*
+  ✅ Validaciones completas en todos los campos
+  ✅ Validación del formato del código (solo UI)
+  ✅ Insert correctamente sin columna inexistente
+  ✅ Manejo de errores y context.mounted
+  ✅ Bloqueo de botón mientras carga
+  ✅ Limpieza de controllers
+  ✅ Manejo de usuario no autenticado
+  ✅ Navegación correcta
+*/
