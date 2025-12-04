@@ -3,11 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import '../video_player_screen.dart';
-import 'dart:io';
 import '../teacher/course_comments_screen.dart';
+import 'dart:typed_data';
+import '../teacher/download_helper.dart';
 
 class TeacherCoursesScreen extends StatefulWidget {
   const TeacherCoursesScreen({super.key});
@@ -49,17 +48,22 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           .eq('teacher_id', user!.id)
           .order('created_at', ascending: false);
 
+      if (!mounted) return;
+      final courses = List<Map<String, dynamic>>.from(response);
+
       setState(() {
-        _courses = List<Map<String, dynamic>>.from(response);
-        _filteredCourses = _courses;
+        _courses = courses;
+        _filteredCourses = courses;
         _isLoading = false;
       });
 
-      // Cargar materiales para cada curso
-      for (var course in _courses) {
+      for (var course in courses) {
+        if (!mounted) return;
         _loadCourseMaterials(course['id']);
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
       print('Error loading courses: $e');
     }
@@ -73,15 +77,19 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           .eq('course_id', courseId)
           .order('created_at', ascending: false);
 
+      if (!mounted) return;
+
       setState(() {
         _courseMaterials[courseId] = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
+      if (!mounted) return;
       print('Error loading materials for course $courseId: $e');
     }
   }
 
   void _searchCourse(String query) {
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredCourses = _courses;
@@ -129,42 +137,40 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
     try {
       await _supabase.from('courses').delete().eq('id', courseId);
-      await _loadCourses(); // Recargar la lista
+      await _loadCourses();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Curso eliminado exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Curso eliminado exitosamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al eliminar curso: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar curso: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  // FUNCIONALIDAD DE VISUALIZAR Y DESCARGAR MATERIALES
   Future<void> _openMaterial(Map<String, dynamic> material) async {
     final String fileUrl = material['file_url'];
     final String title = material['title'] ?? 'Material';
     final String fileType = material['file_type'];
 
-    // Si es un enlace externo
     if (fileType == 'link') {
       await _openLink(fileUrl);
       return;
     }
 
-    // Si es un video, abrir en el reproductor
     if (fileType == 'video') {
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -174,7 +180,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
       return;
     }
 
-    // Mostrar diálogo de opciones para otros archivos
+    if (!mounted) return;
     final action = await showDialog<MaterialAction>(
       context: context,
       builder: (context) => AlertDialog(
@@ -221,77 +227,62 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   Future<void> _openLink(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo abrir: $url')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir: $url')),
+      );
     }
   }
 
   Future<void> _viewInBrowser(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir en el navegador')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir en el navegador')),
+      );
     }
   }
 
   Future<void> _downloadAndSave(
-      String url, String fileName, String fileType) async {
+    String url,
+    String fileName,
+    String fileType,
+  ) async {
     try {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Descargando $fileName...'),
-            duration: const Duration(seconds: 2),
+            content: Text('Preparando descarga de $fileName...'),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
 
-      final dir = await getApplicationDocumentsDirectory();
-      final cleanFileName = _cleanFileName(fileName);
-      final filePath = '${dir.path}/$cleanFileName';
+      Uint8List bytes;
+      try {
+        final response = await _dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        bytes = Uint8List.fromList(response.data!);
+      } catch (e) {
+        throw Exception('No se pudieron descargar los bytes: $e');
+      }
 
-      final response = await _dio.get(
-        url,
-        options: Options(responseType: ResponseType.bytes),
+      await DownloadHelper.downloadFile(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: _getMimeType(fileType),
       );
-
-      final file = await File(filePath).writeAsBytes(response.data);
-
-      // Intentar abrir el archivo
-      final result = await OpenFile.open(filePath);
-
-      if (mounted) {
-        if (result.type == ResultType.done) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('"$cleanFileName" descargado y abierto'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Archivo guardado en: ${file.path}'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al descargar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al descargar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -326,28 +317,34 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
       await _supabase.from('materials').delete().eq('id', materialId);
       await _loadCourseMaterials(courseId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Material eliminado'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Material eliminado'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al eliminar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _navigateToCourseMaterials(Map<String, dynamic> course) {
-    context.push('/teacher/courses/${course['id']}/materials', extra: course);
+    context.go(
+      '/teacher/materials',
+      extra: {
+        'courseId': course['id'] as String,
+        'courseTitle': course['title'],
+      },
+    );
   }
 
   void _navigateToCourseComments(Map<String, dynamic> course) {
@@ -355,23 +352,24 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   void _onItemTapped(int index) {
+    if (!mounted) return;
+
     setState(() {
       _currentIndex = index;
     });
 
     switch (index) {
-      case 0: // Cursos (ya estamos aquí)
+      case 0:
         break;
-      case 1: // Materiales
+      case 1:
         context.go('/teacher/materials');
         break;
-      case 2: // Perfil
+      case 2:
         context.go('/profile');
         break;
     }
   }
 
-  // MÉTODOS AUXILIARES PARA ARCHIVOS
   String _cleanFileName(String fileName) {
     final cleaned = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     if (cleaned.length > 100) {
@@ -380,6 +378,29 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
       return '$name.$extension';
     }
     return cleaned;
+  }
+
+  String _getMimeType(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'image':
+        return 'image/jpeg';
+      case 'document':
+        return 'application/msword';
+      case 'text':
+        return 'text/plain';
+      case 'video':
+        return 'video/mp4';
+      case 'audio':
+        return 'audio/mpeg';
+      case 'spreadsheet':
+        return 'application/vnd.ms-excel';
+      case 'presentation':
+        return 'application/vnd.ms-powerpoint';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
   IconData _getFileIcon(String fileType) {
@@ -473,7 +494,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // 🔍 BUSCADOR
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextField(
@@ -503,7 +523,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                     ),
                   ),
                 ),
-
                 Expanded(
                   child: _courses.isEmpty
                       ? const Center(
@@ -625,6 +644,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                 : Icons.expand_more,
                                           ),
                                           onPressed: () {
+                                            if (!mounted) return;
                                             setState(() {
                                               _expandedCourses[courseId] =
                                                   !isExpanded;
@@ -670,7 +690,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                               trailing: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  // Botón para abrir/ver
                                                   IconButton(
                                                     icon: Icon(
                                                       material['file_type'] ==
@@ -688,7 +707,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                     onPressed: () =>
                                                         _openMaterial(material),
                                                   ),
-                                                  // Botón para descargar (si no es enlace)
                                                   if (material['file_type'] !=
                                                       'link')
                                                     IconButton(
@@ -705,7 +723,6 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                         material['file_type'],
                                                       ),
                                                     ),
-                                                  // Botón para eliminar
                                                   IconButton(
                                                     icon: const Icon(
                                                       Icons.delete,

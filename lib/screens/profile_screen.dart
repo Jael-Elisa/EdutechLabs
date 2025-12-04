@@ -37,6 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
         return;
       }
@@ -44,21 +45,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final response =
           await _supabase.from('profiles').select().eq('id', user.id).single();
 
+      if (!mounted) return;
+
       setState(() {
         _profile = response;
         _nameController.text = _profile?['full_name'] ?? '';
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar perfil: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar perfil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -76,6 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final file = result.files.first;
     if (file.bytes == null) return;
 
+    if (!mounted) return;
     setState(() => _isUploadingPhoto = true);
 
     try {
@@ -96,26 +100,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select()
           .single();
 
+      if (!mounted) return;
+
       setState(() {
         _profile = updated;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foto de perfil actualizada')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Foto de perfil actualizada')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al subir foto: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al subir foto: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isUploadingPhoto = false);
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
     }
   }
 
@@ -131,6 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() => _isSaving = true);
 
     try {
@@ -144,26 +150,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select()
           .single();
 
+      if (!mounted) return;
+
       setState(() {
         _profile = updated;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Perfil actualizado')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar perfil: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar perfil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (!mounted) return;
+      setState(() => _isSaving = false);
     }
   }
 
@@ -234,8 +241,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Nombre editable
                   TextField(
                     controller: _nameController,
                     decoration: const InputDecoration(
@@ -244,8 +249,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // Rol
                   Chip(
                     label: Text(
                       authProvider.userRole == 'teacher'
@@ -257,10 +260,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ? Colors.blue
                         : Colors.green,
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Email
                   Card(
                     child: ListTile(
                       leading: const Icon(Icons.email),
@@ -268,7 +268,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       subtitle: Text(_profile?['email'] ?? 'Sin email'),
                     ),
                   ),
-
                   Card(
                     child: ListTile(
                       leading: const Icon(Icons.calendar_today),
@@ -282,7 +281,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-
                   if (_profile?['bio'] != null) ...[
                     Card(
                       child: ListTile(
@@ -292,9 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 20),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(

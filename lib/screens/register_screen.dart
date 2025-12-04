@@ -20,74 +20,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  
-  // Variables para controlar qué validaciones mostrar
+
   bool _showLengthError = false;
   bool _showUppercaseError = false;
   bool _showLowercaseError = false;
   bool _showNumberError = false;
   bool _showSpecialCharError = false;
 
-  // Función para validar la contraseña y actualizar los estados de error
   void _validatePasswordOnType(String value) {
     setState(() {
       _showLengthError = value.isNotEmpty && value.length < 8;
-      _showUppercaseError = value.isNotEmpty && !value.contains(RegExp(r'[A-Z]'));
-      _showLowercaseError = value.isNotEmpty && !value.contains(RegExp(r'[a-z]'));
+      _showUppercaseError =
+          value.isNotEmpty && !value.contains(RegExp(r'[A-Z]'));
+      _showLowercaseError =
+          value.isNotEmpty && !value.contains(RegExp(r'[a-z]'));
       _showNumberError = value.isNotEmpty && !value.contains(RegExp(r'[0-9]'));
-      _showSpecialCharError = value.isNotEmpty && !value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      _showSpecialCharError = value.isNotEmpty &&
+          !value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
     });
   }
 
-  // Función para validación final al presionar registrar
   String? _validatePasswordOnSubmit(String? value) {
     if (value == null || value.isEmpty) {
       return 'Por favor ingresa tu contraseña';
     }
-    
-    // Solo mostrar el primer error encontrado
+
     if (value.length < 8) {
       return 'La contraseña debe tener al menos 8 caracteres';
     }
-    
+
     if (!value.contains(RegExp(r'[A-Z]'))) {
       return 'Debe contener al menos una letra mayúscula';
     }
-    
+
     if (!value.contains(RegExp(r'[a-z]'))) {
       return 'Debe contener al menos una letra minúscula';
     }
-    
+
     if (!value.contains(RegExp(r'[0-9]'))) {
       return 'Debe contener al menos un número';
     }
-    
+
     if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
       return 'Debe contener al menos un carácter especial (!@#\$%^&* etc.)';
     }
-    
+
     return null;
   }
 
-  // Función para mostrar los requisitos de la contraseña mientras se escribe
   Widget _buildPasswordRequirements() {
     final hasText = _passwordController.text.isNotEmpty;
-    
-    if (!hasText) return const SizedBox(); // No mostrar nada si no hay texto
-    
+
+    if (!hasText) return const SizedBox();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Requisitos de contraseña:',
-          style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        if (_showLengthError) _buildRequirementError('Debe tener al menos 8 caracteres'),
-        if (_showUppercaseError) _buildRequirementError('Debe tener al menos una mayúscula (A-Z)'),
-        if (_showLowercaseError) _buildRequirementError('Debe tener al menos una minúscula (a-z)'),
-        if (_showNumberError) _buildRequirementError('Debe tener al menos un número (0-9)'),
-        if (_showSpecialCharError) _buildRequirementError('Debe tener al menos un carácter especial (!@#\$%^&*)'),
+        if (_showLengthError)
+          _buildRequirementError('Debe tener al menos 8 caracteres'),
+        if (_showUppercaseError)
+          _buildRequirementError('Debe tener al menos una mayúscula (A-Z)'),
+        if (_showLowercaseError)
+          _buildRequirementError('Debe tener al menos una minúscula (a-z)'),
+        if (_showNumberError)
+          _buildRequirementError('Debe tener al menos un número (0-9)'),
+        if (_showSpecialCharError)
+          _buildRequirementError(
+              'Debe tener al menos un carácter especial (!@#\$%^&*)'),
       ],
     );
   }
@@ -114,7 +119,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    // Validar todos los campos
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
@@ -131,12 +135,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       await context.read<AuthProvider>().signUp(
-        _emailController.text.trim(),
-        _passwordController.text,
-        _fullNameController.text.trim(),
-        _selectedRole,
-      );
-      
+            _emailController.text.trim(),
+            _passwordController.text,
+            _fullNameController.text.trim(),
+            _selectedRole,
+          );
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -244,9 +248,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Text('Docente'),
                   ),
                 ],
-                onChanged: _isLoading ? null : (value) {
-                  setState(() => _selectedRole = value!);
-                },
+                onChanged: _isLoading
+                    ? null
+                    : (value) {
+                        setState(() => _selectedRole = value!);
+                      },
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -258,9 +264,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 obscureText: _obscurePassword,
@@ -278,9 +287,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
-                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                    onPressed: () => setState(() =>
+                        _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
                 ),
                 obscureText: _obscureConfirmPassword,

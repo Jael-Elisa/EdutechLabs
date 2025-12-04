@@ -22,13 +22,11 @@ class AuthProvider with ChangeNotifier {
     try {
       print('🔐 Iniciando registro para: $email');
 
-      final AuthResponse response = await _supabase.auth
-          .signUp(
-            email: email.trim(),
-            password: password,
-            data: {'full_name': fullName.trim(), 'role': role},
-          )
-          .timeout(const Duration(seconds: 30));
+      final AuthResponse response = await _supabase.auth.signUp(
+        email: email.trim(),
+        password: password,
+        data: {'full_name': fullName.trim(), 'role': role},
+      ).timeout(const Duration(seconds: 30));
 
       if (response.user == null) {
         throw Exception('No se pudo crear el usuario');
@@ -36,12 +34,10 @@ class AuthProvider with ChangeNotifier {
 
       print('✅ Usuario creado en Auth: ${response.user!.id}');
 
-      // Crear perfil en la base de datos
       try {
         await _createUserProfile(response.user!.id, email, fullName, role);
       } catch (e) {
         print('⚠️ Error creando perfil: $e');
-        // Continuar aunque falle el perfil
       }
     } on TimeoutException {
       throw Exception(
@@ -62,16 +58,13 @@ class AuthProvider with ChangeNotifier {
     String fullName,
     String role,
   ) async {
-    await _supabase
-        .from('profiles')
-        .insert({
-          'id': userId,
-          'email': email.trim(),
-          'full_name': fullName.trim(),
-          'role': role,
-          'created_at': DateTime.now().toIso8601String(),
-        })
-        .timeout(const Duration(seconds: 15));
+    await _supabase.from('profiles').insert({
+      'id': userId,
+      'email': email.trim(),
+      'full_name': fullName.trim(),
+      'role': role,
+      'created_at': DateTime.now().toIso8601String(),
+    }).timeout(const Duration(seconds: 15));
 
     print('✅ Perfil creado en base de datos');
   }
@@ -128,7 +121,6 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Verificar estado de autenticación al iniciar la app
   User? getInitialUser() {
     return _supabase.auth.currentUser;
   }

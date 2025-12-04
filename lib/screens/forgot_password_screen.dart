@@ -25,7 +25,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       await supabase.auth.resetPasswordForEmail(
         _emailController.text.trim(),
-        redirectTo: 'edutechlabs://reset-password', // URL para deep linking
+        redirectTo: 'edutechlabs://reset-password',
       );
 
       setState(() => _emailSent = true);
@@ -75,7 +75,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
@@ -138,10 +137,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
-
-              // Formulario
               Container(
                 padding: const EdgeInsets.all(30),
                 decoration: BoxDecoration(
@@ -201,7 +197,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                         ),
                       ] else ...[
-                        // Campo de email
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFF2A3045),
@@ -244,8 +239,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 25),
-
-                        // Botón de enviar
                         SizedBox(
                           width: double.infinity,
                           height: 56,
@@ -289,8 +282,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Botón para volver
                         TextButton(
                           onPressed: () => context.pop(),
                           child: const Text(

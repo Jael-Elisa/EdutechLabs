@@ -25,7 +25,6 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Obtener el ID del usuario actual (profesor)
       final user = supabase.auth.currentUser;
       if (user == null) {
         if (context.mounted) {
@@ -40,7 +39,6 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
         return;
       }
 
-      // Insertar el curso en la base de datos
       await supabase.from('courses').insert({
         'title': _courseNameController.text.trim(),
         'description': _courseDescriptionController.text.trim(),
@@ -57,7 +55,6 @@ class _CourseCreationScreenState extends State<CourseCreationScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // ✅ Navegar a teacher_courses_screen
         context.go('/teacher/courses');
       }
     } catch (e) {

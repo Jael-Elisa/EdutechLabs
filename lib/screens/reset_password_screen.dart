@@ -36,7 +36,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     try {
       final supabase = Supabase.instance.client;
 
-      // Actualizar la contraseña del usuario
       await supabase.auth.updateUser(
         UserAttributes(password: _passwordController.text.trim()),
       );
@@ -106,7 +105,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
@@ -169,10 +167,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
-
-              // Formulario
               Container(
                 padding: const EdgeInsets.all(30),
                 decoration: BoxDecoration(
@@ -232,7 +227,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                       ] else ...[
-                        // Campo de nueva contraseña
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFF2A3045),
@@ -278,8 +272,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Campo de confirmar contraseña
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFF2A3045),
@@ -327,12 +319,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 25),
-
-                        // Indicador de fortaleza de contraseña
                         _buildPasswordStrengthIndicator(),
                         const SizedBox(height: 20),
-
-                        // Botón de actualizar
                         SizedBox(
                           width: double.infinity,
                           height: 56,
@@ -376,8 +364,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Botón para cancelar
                         TextButton(
                           onPressed: () => context.pop(),
                           child: const Text(
@@ -439,10 +425,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           value: password.isEmpty
               ? 0
               : password.length < 6
-              ? 0.33
-              : password.length < 8
-              ? 0.66
-              : 1.0,
+                  ? 0.33
+                  : password.length < 8
+                      ? 0.66
+                      : 1.0,
           backgroundColor: Colors.grey.shade800,
           valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
           minHeight: 6,

@@ -24,9 +24,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await context.read<AuthProvider>().signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -59,7 +59,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Header con logo
               Container(
                 padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
@@ -83,7 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Logo animado
                     Container(
                       width: 90,
                       height: 90,
@@ -123,10 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
-
-              // Formulario de login
               Container(
                 padding: const EdgeInsets.all(30),
                 decoration: BoxDecoration(
@@ -162,8 +157,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(fontSize: 16, color: Colors.white70),
                       ),
                       const SizedBox(height: 30),
-
-                      // Campo de email
                       Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFF2A3045),
@@ -207,8 +200,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-
-                      // Campo de contraseña
                       Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFF2A3045),
@@ -262,17 +253,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 15),
-
-                      // Olvidé mi contraseña
-                      // Olvidé mi contraseña
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: _isLoading
                               ? null
                               : () => context.push(
-                                  '/forgot-password',
-                                ), // Cambia esto
+                                    '/forgot-password',
+                                  ),
                           child: const Text(
                             '¿Olvidaste tu contraseña?',
                             style: TextStyle(
@@ -283,8 +271,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 25),
-
-                      // Botón de login
                       SizedBox(
                         width: double.infinity,
                         height: 56,
@@ -328,8 +314,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 25),
-
-                      // Separador
                       Row(
                         children: [
                           Expanded(
@@ -357,15 +341,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-
-                      // Botón de registro
                       SizedBox(
                         width: double.infinity,
                         height: 56,
                         child: OutlinedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => context.go('/register'),
+                          onPressed:
+                              _isLoading ? null : () => context.go('/register'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.blueAccent,
                             side: const BorderSide(color: Colors.blueAccent),

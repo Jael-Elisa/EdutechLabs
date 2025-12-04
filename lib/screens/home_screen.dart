@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../app/auth_provider.dart';
-// Importa las nuevas pantallas
 import 'teacher/teacher_courses_screen.dart';
 import 'teacher/course_creation_screen.dart';
 import 'teacher/teacher_materials_screen.dart';
@@ -181,7 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Removí 'const' de las listas y de los constructores que no son constantes
   final List<BottomNavigationBarItem> _teacherBottomNavItems = [
     BottomNavigationBarItem(
       icon: const Icon(Icons.school),

@@ -31,7 +31,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _handleAuthState() {
-    // Escuchar cambios de estado de autenticación
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       final session = data.session;
@@ -39,9 +38,7 @@ class _MyAppState extends State<MyApp> {
       print('Auth state changed: $event');
 
       if (event == AuthChangeEvent.passwordRecovery) {
-        // Cuando el usuario hace clic en el enlace de reset
         print('Password recovery event detected');
-        // Navegar a la pantalla de reset de contraseña
         WidgetsBinding.instance.addPostFrameCallback((_) {
           router.go('/reset-password');
         });

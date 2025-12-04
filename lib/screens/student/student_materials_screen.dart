@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:math'; // ✅ Agregar este import
-// Opcional
+import 'dart:math';
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
+
 import '../material_comments_screen.dart';
+import '../teacher/download_helper.dart';
 
 class StudentMaterialsScreen extends StatefulWidget {
   const StudentMaterialsScreen({super.key});
@@ -13,6 +16,8 @@ class StudentMaterialsScreen extends StatefulWidget {
 
 class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final Dio _dio = Dio();
+
   List<Map<String, dynamic>> _enrolledCourses = [];
   final Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
   bool _isLoading = true;
@@ -24,12 +29,16 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
     _loadEnrolledCourses();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _loadEnrolledCourses() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Cargar cursos en los que está inscrito el estudiante
       final response = await _supabase.from('enrollments').select('''
             course_id,
             courses!inner (
@@ -42,16 +51,27 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             )
           ''').eq('student_id', user.id).eq('status', 'active');
 
+      if (!mounted) return;
+
+      final list = List<Map<String, dynamic>>.from(response);
+
       setState(() {
-        _enrolledCourses = List<Map<String, dynamic>>.from(response);
-        if (_enrolledCourses.isNotEmpty) {
-          _selectedCourseId = _enrolledCourses.first['course_id'].toString();
-          _loadCourseMaterials(_selectedCourseId!);
-        } else {
-          _isLoading = false;
-        }
+        _enrolledCourses = list;
+        _isLoading = false;
       });
+
+      if (list.isNotEmpty) {
+        final firstCourseId = list.first['course_id'].toString();
+
+        if (!mounted) return;
+        setState(() {
+          _selectedCourseId = firstCourseId;
+        });
+
+        await _loadCourseMaterials(firstCourseId);
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       _showError('Error al cargar cursos: $e');
     }
@@ -59,9 +79,9 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
 
   Future<void> _loadCourseMaterials(String courseId) async {
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
 
-      // Consulta simplificada sin la relación con uploader_id
       final materials = await _supabase.from('materials').select('''
             id,
             course_id,
@@ -74,38 +94,66 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
             uploader_id
           ''').eq('course_id', courseId).order('created_at', ascending: false);
 
+      if (!mounted) return;
+
       setState(() {
         _courseMaterials[courseId] = List<Map<String, dynamic>>.from(materials);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       _showError('Error al cargar materiales: $e');
     }
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
-  void _downloadMaterial(String fileUrl, String fileName) {
-    // Aquí puedes implementar la descarga del archivo
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Descargando: $fileName'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    print('Descargar: $fileUrl');
+  Future<void> _downloadMaterial(String fileUrl, String fileName) async {
+    if (fileUrl.isEmpty) {
+      _showError('No hay archivo asociado a este material');
+      return;
+    }
+
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Preparando descarga de $fileName...'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      final response = await _dio.get<List<int>>(
+        fileUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      final bytes = Uint8List.fromList(response.data!);
+      final mimeType = DownloadHelper.getMimeType(fileName);
+
+      await DownloadHelper.downloadFile(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: mimeType,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Error al descargar: $e');
+    }
   }
 
   String _formatFileSize(int bytes) {
     if (bytes <= 0) return '0 B';
     const suffixes = ['B', 'KB', 'MB', 'GB'];
-    final i = (log(bytes) / log(1024)).floor(); // ✅ log ahora está disponible
-    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}'; // ✅ pow ahora está disponible
+    final i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
   }
 
   String _formatDate(dynamic date) {
@@ -246,6 +294,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
           ),
         ),
         onTap: () {
+          if (!mounted) return;
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => MaterialCommentsScreen(material: material),
@@ -288,12 +337,11 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
                 )
               : Column(
                   children: [
-                    // Selector de cursos
                     Container(
                       padding: const EdgeInsets.all(16),
                       color: Colors.grey.shade50,
                       child: DropdownButtonFormField<String>(
-                        initialValue: _selectedCourseId,
+                        value: _selectedCourseId,
                         decoration: const InputDecoration(
                           labelText: 'Seleccionar Curso',
                           border: OutlineInputBorder(),
@@ -313,14 +361,13 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
                         }).toList(),
                         onChanged: (courseId) {
                           if (courseId != null) {
+                            if (!mounted) return;
                             setState(() => _selectedCourseId = courseId);
                             _loadCourseMaterials(courseId);
                           }
                         },
                       ),
                     ),
-
-                    // Materiales del curso seleccionado
                     Expanded(
                       child: _selectedCourseId == null ||
                               _courseMaterials[_selectedCourseId] == null ||

@@ -1,4 +1,3 @@
-// lib/app/router.dart
 import 'package:go_router/go_router.dart';
 import '../screens/login_screen.dart';
 import '../screens/forgot_password_screen.dart';
@@ -17,7 +16,6 @@ import '../screens/notifications_screen.dart';
 final router = GoRouter(
   initialLocation: '/login',
   routes: [
-    // Rutas principales
     GoRoute(
       path: '/',
       name: 'root',
@@ -43,8 +41,6 @@ final router = GoRouter(
       name: 'profile',
       builder: (context, state) => const ProfileScreen(),
     ),
-
-    // ✅ RUTAS DEL TEACHER
     GoRoute(
       path: '/teacher/courses',
       name: 'teacher_courses',
@@ -57,8 +53,11 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/teacher/materials',
-      name: 'teacher_materials',
-      builder: (context, state) => const TeacherMaterialsScreen(),
+      builder: (context, state) {
+        final extras = state.extra as Map<String, dynamic>?;
+        final initialCourseId = extras?['courseId'] as String?;
+        return TeacherMaterialsScreen(initialCourseId: initialCourseId);
+      },
     ),
     GoRoute(
       path: '/course-comments',
@@ -68,8 +67,6 @@ final router = GoRouter(
         return CourseCommentsScreen(course: course);
       },
     ),
-
-    // ✅ RUTAS DEL STUDENT
     GoRoute(
       path: '/student/courses',
       name: 'student_courses',
@@ -80,7 +77,6 @@ final router = GoRouter(
       name: 'student_materials',
       builder: (context, state) => const StudentMaterialsScreen(),
     ),
-    // En tu router.dart, agrega esta ruta:
     GoRoute(
       path: '/forgot-password',
       name: 'forgot_password',

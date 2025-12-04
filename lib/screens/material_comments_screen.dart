@@ -203,7 +203,6 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
       ),
       body: Column(
         children: [
-          // --------- CABECERA DEL MATERIAL (Detalle) ----------
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
@@ -253,7 +252,6 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
               ),
             ),
           ),
-
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0),
             child: Align(
@@ -268,8 +266,6 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // --------- LISTA DE COMENTARIOS ----------
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -336,8 +332,6 @@ class _MaterialCommentsScreenState extends State<MaterialCommentsScreen> {
                         ),
                       ),
           ),
-
-          // --------- CAJA DE NUEVO COMENTARIO / BLOQUEO ----------
           if (!canComment)
             Padding(
               padding: const EdgeInsets.all(12.0),
