@@ -61,9 +61,12 @@ final router = GoRouter(
       builder: (context, state) => const TeacherMaterialsScreen(),
     ),
     GoRoute(
-      path: '/teacher/comments',
-      name: 'teacher_comments',
-      builder: (context, state) => const CourseCommentsScreen(),
+      path: '/course-comments',
+      name: 'course_comments',
+      builder: (context, state) {
+        final course = state.extra as Map<String, dynamic>;
+        return CourseCommentsScreen(course: course);
+      },
     ),
 
     // ✅ RUTAS DEL STUDENT

@@ -9,6 +9,7 @@ import 'teacher/teacher_materials_screen.dart';
 import 'student/student_courses_screen.dart';
 import 'student/student_materials_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/notifications_icon_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

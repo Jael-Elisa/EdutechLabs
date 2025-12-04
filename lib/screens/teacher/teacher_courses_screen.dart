@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../video_player_screen.dart';
 import 'dart:io';
+import '../teacher/course_comments_screen.dart';
 
 class TeacherCoursesScreen extends StatefulWidget {
   const TeacherCoursesScreen({super.key});
@@ -741,9 +742,17 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                   'Agregar Material'),
                                             ),
                                             OutlinedButton.icon(
-                                              onPressed: () =>
-                                                  _navigateToCourseComments(
-                                                      course),
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        CourseCommentsScreen(
+                                                      course: course,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                               icon: const Icon(Icons.comment),
                                               label: const Text('Comentarios'),
                                             ),

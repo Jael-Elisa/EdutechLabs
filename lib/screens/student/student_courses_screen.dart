@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../teacher/course_comments_screen.dart';
 
 class StudentCoursesScreen extends StatefulWidget {
   const StudentCoursesScreen({super.key});
@@ -13,7 +14,7 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
   List<Map<String, dynamic>> _courses = [];
   bool _isLoading = true;
   final Set<String> _enrollingCourses = <String>{};
-  final Map<String, bool> _enrolledCourses = {}; // Para cachear inscripciones
+  final Map<String, bool> _enrolledCourses = {};
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
           .from('courses')
           .select('*, profiles(full_name)')
           .order('created_at', ascending: false);
-      
+
       // Cargar inscripciones del usuario
       await _loadUserEnrollments(user.id);
 
@@ -91,13 +92,12 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
       _enrolledCourses[courseId] = true;
 
       _showSuccess('¡Inscripción exitosa en $courseTitle!');
-      
+
       // Recargar la lista para reflejar cambios
       setState(() {});
-
     } catch (e) {
       // Manejar error específico de constraint única
-      if (e.toString().contains('duplicate key') || 
+      if (e.toString().contains('duplicate key') ||
           e.toString().contains('unique constraint')) {
         _showError('Ya estás inscrito en este curso');
         _enrolledCourses[courseId] = true; // Actualizar cache
@@ -158,22 +158,27 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
                       final courseId = course['id'].toString();
                       final isEnrolling = _enrollingCourses.contains(courseId);
                       final isEnrolled = _enrolledCourses.containsKey(courseId);
-                      
+
                       return Card(
                         elevation: 3,
                         margin: const EdgeInsets.only(bottom: 16),
                         child: ListTile(
+                          isThreeLine: true,
                           contentPadding: const EdgeInsets.all(16),
                           leading: Container(
                             width: 50,
                             height: 50,
                             decoration: BoxDecoration(
-                              color: isEnrolled ? Colors.green.shade50 : Colors.blue.shade50,
+                              color: isEnrolled
+                                  ? Colors.green.shade50
+                                  : Colors.blue.shade50,
                               borderRadius: BorderRadius.circular(25),
                             ),
                             child: Icon(
                               isEnrolled ? Icons.check_circle : Icons.school,
-                              color: isEnrolled ? Colors.green : Colors.blue.shade700,
+                              color: isEnrolled
+                                  ? Colors.green
+                                  : Colors.blue.shade700,
                               size: 30,
                             ),
                           ),
@@ -228,18 +233,82 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
                             ],
                           ),
                           trailing: isEnrolling
-                              ? const CircularProgressIndicator()
+                              ? const SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
                               : isEnrolled
-                                  ? ElevatedButton(
-                                      onPressed: null, // Deshabilitado si ya está inscrito
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.grey,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
+                                  ? SizedBox(
+                                      width: 220,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          ElevatedButton(
+                                            onPressed: null,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.grey.shade800,
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              textStyle: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                            ),
+                                            child: const Text('Inscrito'),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ElevatedButton.icon(
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      CourseCommentsScreen(
+                                                          course: course),
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(
+                                                Icons.forum_outlined,
+                                                size: 18),
+                                            label: const Text(
+                                              'Comentarios',
+                                              style: TextStyle(fontSize: 13),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  const Color(0xFF1A237E),
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              textStyle: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      child: const Text('Inscrito'),
                                     )
                                   : ElevatedButton(
                                       onPressed: () => _enrollInCourse(
@@ -247,10 +316,12 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
                                         course['title'] ?? 'el curso',
                                       ),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1A237E),
+                                        backgroundColor:
+                                            const Color(0xFF1A237E),
                                         foregroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
                                       ),
                                       child: const Text('Inscribirse'),
