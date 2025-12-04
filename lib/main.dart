@@ -54,7 +54,7 @@ class _MyAppState extends State<MyApp> {
         routerConfig: router,
         title: 'Edutech Labs',
         theme: ThemeData(
-          primaryColor: const Color(0xFF1A237E),
+          primaryColor: const Color.fromARGB(255, 255, 255, 255),
           scaffoldBackgroundColor: const Color(0xFF0A0F1C),
           appBarTheme: const AppBarTheme(
             backgroundColor: Color(0xFF1A237E),
@@ -68,7 +68,7 @@ class _MyAppState extends State<MyApp> {
           useMaterial3: true,
         ),
         darkTheme: ThemeData(
-          primaryColor: const Color(0xFF1A237E),
+          primaryColor: const Color.fromARGB(255, 255, 255, 255),
           scaffoldBackgroundColor: const Color(0xFF0A0F1C),
           appBarTheme: const AppBarTheme(
             backgroundColor: Color(0xFF1A237E),

@@ -16,9 +16,84 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
   bool _passwordUpdated = false;
 
+  bool _showLengthError = false;
+  bool _showUppercaseError = false;
+  bool _showLowercaseError = false;
+  bool _showNumberError = false;
+  bool _showSpecialCharError = false;
+
+  void _validatePasswordOnType(String value) {
+    setState(() {
+      _showLengthError = value.isNotEmpty && value.length < 8;
+      _showUppercaseError =
+          value.isNotEmpty && !value.contains(RegExp(r'[A-Z]'));
+      _showLowercaseError =
+          value.isNotEmpty && !value.contains(RegExp(r'[a-z]'));
+      _showNumberError = value.isNotEmpty && !value.contains(RegExp(r'[0-9]'));
+      _showSpecialCharError = value.isNotEmpty &&
+          !value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+    });
+  }
+
+  Widget _buildRequirementError(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4.0, bottom: 2.0),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 14, color: Colors.red.shade600),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.red.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordRequirements() {
+    final hasText = _passwordController.text.isNotEmpty;
+    if (!hasText) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Requisitos de contraseña:',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (_showLengthError)
+          _buildRequirementError('Debe tener al menos 8 caracteres'),
+        if (_showUppercaseError)
+          _buildRequirementError('Debe tener al menos una mayúscula (A-Z)'),
+        if (_showLowercaseError)
+          _buildRequirementError('Debe tener al menos una minúscula (a-z)'),
+        if (_showNumberError)
+          _buildRequirementError('Debe tener al menos un número (0-9)'),
+        if (_showSpecialCharError)
+          _buildRequirementError(
+            'Debe tener al menos un carácter especial (!@#\$%^&*)',
+          ),
+      ],
+    );
+  }
+
   Future<void> _updatePassword() async {
+    if (_passwordUpdated) return;
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
@@ -35,21 +110,24 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     try {
       final supabase = Supabase.instance.client;
-
       await supabase.auth.updateUser(
         UserAttributes(password: _passwordController.text.trim()),
       );
+      await supabase.auth.signOut();
+
+      if (!mounted) return;
 
       setState(() => _passwordUpdated = true);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contraseña actualizada exitosamente'),
-            backgroundColor: Colors.green,
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Contraseña actualizada exitosamente. '
+            'Ahora puedes iniciar sesión con tu nueva contraseña.',
           ),
-        );
-      }
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -60,7 +138,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -68,9 +148,27 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (value == null || value.isEmpty) {
       return 'Por favor ingresa tu nueva contraseña';
     }
-    if (value.length < 6) {
-      return 'La contraseña debe tener al menos 6 caracteres';
+
+    if (value.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
     }
+
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Debe contener al menos una letra mayúscula';
+    }
+
+    if (!RegExp(r'[a-z]').hasMatch(value)) {
+      return 'Debe contener al menos una letra minúscula';
+    }
+
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Debe contener al menos un número';
+    }
+
+    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value)) {
+      return 'Debe contener al menos un carácter especial (!@#\$%^&* etc.)';
+    }
+
     return null;
   }
 
@@ -206,7 +304,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Tu contraseña ha sido actualizada exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.',
+                          'Tu contraseña ha sido actualizada exitosamente. '
+                          'Ahora puedes iniciar sesión con tu nueva contraseña.',
                           style: TextStyle(color: Colors.white70),
                           textAlign: TextAlign.center,
                         ),
@@ -237,6 +336,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                           child: TextFormField(
                             controller: _passwordController,
+                            onChanged: _validatePasswordOnType,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -271,6 +371,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             validator: _validatePassword,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        _buildPasswordRequirements(),
+                        const SizedBox(height: 8),
+                        _buildPasswordStrengthIndicator(),
                         const SizedBox(height: 20),
                         Container(
                           decoration: BoxDecoration(
@@ -319,8 +423,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 25),
-                        _buildPasswordStrengthIndicator(),
-                        const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           height: 56,
@@ -365,7 +467,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                         const SizedBox(height: 20),
                         TextButton(
-                          onPressed: () => context.pop(),
+                          onPressed: () => context.go('/login'),
                           child: const Text(
                             'Cancelar',
                             style: TextStyle(
@@ -388,32 +490,42 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Widget _buildPasswordStrengthIndicator() {
     final password = _passwordController.text;
-    String strengthText = 'Seguridad de la contraseña';
-    Color strengthColor = Colors.grey;
+    if (password.isEmpty) return const SizedBox.shrink();
 
-    if (password.isNotEmpty) {
-      if (password.length < 6) {
-        strengthText = 'Débil';
-        strengthColor = Colors.red;
-      } else if (password.length < 8) {
-        strengthText = 'Media';
-        strengthColor = Colors.orange;
-      } else if (RegExp(
-        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)',
-      ).hasMatch(password)) {
-        strengthText = 'Fuerte';
-        strengthColor = Colors.green;
-      } else {
-        strengthText = 'Media';
-        strengthColor = Colors.orange;
-      }
+    int score = 0;
+    if (password.length >= 8) score++;
+    if (RegExp(r'[A-Z]').hasMatch(password)) score++;
+    if (RegExp(r'[a-z]').hasMatch(password)) score++;
+    if (RegExp(r'[0-9]').hasMatch(password)) score++;
+    if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score++;
+
+    final double value = score / 5.0;
+
+    String strengthText;
+    Color strengthColor;
+
+    if (score <= 1) {
+      strengthText = 'Muy débil';
+      strengthColor = Colors.red;
+    } else if (score == 2) {
+      strengthText = 'Débil';
+      strengthColor = Colors.orange;
+    } else if (score == 3) {
+      strengthText = 'Media';
+      strengthColor = Colors.amber;
+    } else if (score == 4) {
+      strengthText = 'Fuerte';
+      strengthColor = Colors.lightGreen;
+    } else {
+      strengthText = 'Muy fuerte';
+      strengthColor = Colors.green;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          strengthText,
+          'Seguridad de la contraseña: $strengthText',
           style: TextStyle(
             color: strengthColor,
             fontSize: 14,
@@ -422,23 +534,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         ),
         const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: password.isEmpty
-              ? 0
-              : password.length < 6
-                  ? 0.33
-                  : password.length < 8
-                      ? 0.66
-                      : 1.0,
+          value: value,
           backgroundColor: Colors.grey.shade800,
           valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
           minHeight: 6,
-          borderRadius: BorderRadius.circular(3),
         ),
         const SizedBox(height: 4),
-        Text(
-          'Mínimo 6 caracteres, recomendado 8 con mayúsculas, minúsculas y números',
-          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-        ),
       ],
     );
   }

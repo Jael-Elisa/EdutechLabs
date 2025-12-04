@@ -219,7 +219,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 _isUploadingPhoto ? null : _pickAndUploadPhoto,
                             child: CircleAvatar(
                               radius: 18,
-                              backgroundColor: Theme.of(context).primaryColor,
+                              backgroundColor:
+                                  Theme.of(context).appBarTheme.backgroundColor,
                               child: _isUploadingPhoto
                                   ? const SizedBox(
                                       width: 16,
