@@ -483,7 +483,17 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: BorderSide(
+        color: Colors.blueGrey.shade700.withOpacity(0.5),
+        width: 1,
+      ),
+    );
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mis Cursos'),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/teacher/create-course'),
         backgroundColor: const Color(0xFF1A237E),
@@ -495,30 +505,61 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           : Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _searchCourse,
-                    decoration: InputDecoration(
-                      labelText: "Buscar curso...",
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _searchCourse,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                _searchCourse('');
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
+                      cursorColor: const Color(0xFF3D5AFE),
+                      decoration: InputDecoration(
+                        hintText: "Buscar curso...",
+                        hintStyle: TextStyle(
+                          color: Colors.blueGrey.shade300,
+                          fontSize: 14,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF111827),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.blueGrey.shade200,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                color: Colors.blueGrey.shade200,
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _searchCourse('');
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        enabledBorder: baseBorder,
+                        focusedBorder: baseBorder.copyWith(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF3D5AFE),
+                            width: 1.6,
+                          ),
+                        ),
+                        border: baseBorder,
                       ),
                     ),
                   ),

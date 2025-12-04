@@ -2,43 +2,72 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../app/auth_provider.dart';
-import 'teacher/teacher_courses_screen.dart';
-import 'teacher/course_creation_screen.dart';
-import 'teacher/teacher_materials_screen.dart';
-import 'student/student_courses_screen.dart';
-import 'student/student_materials_screen.dart';
-import 'profile_screen.dart';
+import '../screens/profile_screen.dart';
 import '../widgets/notifications_icon_button.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class HomeShell extends StatefulWidget {
+  final Widget child;
+
+  const HomeShell({super.key, required this.child});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
+class _HomeShellState extends State<HomeShell> {
+  int _currentIndexForLocation(String location, String role) {
+    if (role == 'teacher') {
+      if (location.startsWith('/teacher/create-course')) return 1;
+      if (location.startsWith('/teacher/materials')) return 2;
+      if (location.startsWith('/profile')) return 3;
+      return 0;
+    } else {
+      if (location.startsWith('/student/materials')) return 1;
+      if (location.startsWith('/profile')) return 2;
+      return 0;
+    }
+  }
 
-  final List<Widget> _teacherScreens = [
-    const TeacherCoursesScreen(),
-    const CourseCreationScreen(),
-    const TeacherMaterialsScreen(),
-    const ProfileScreen(),
-  ];
-
-  final List<Widget> _studentScreens = [
-    const StudentCoursesScreen(),
-    const StudentMaterialsScreen(),
-    const ProfileScreen(),
-  ];
+  void _onNavTap(int index, String role) {
+    if (role == 'teacher') {
+      switch (index) {
+        case 0:
+          context.go('/teacher/courses');
+          break;
+        case 1:
+          context.go('/teacher/create-course');
+          break;
+        case 2:
+          context.go('/teacher/materials');
+          break;
+        case 3:
+          context.go('/profile');
+          break;
+      }
+    } else {
+      switch (index) {
+        case 0:
+          context.go('/student/courses');
+          break;
+        case 1:
+          context.go('/student/materials');
+          break;
+        case 2:
+          context.go('/profile');
+          break;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final userRole = authProvider.userRole ?? 'student';
 
-    final screens = userRole == 'teacher' ? _teacherScreens : _studentScreens;
+    final routerState = GoRouterState.of(context);
+    final location = routerState.uri.toString();
+    final currentIndex = _currentIndexForLocation(location, userRole);
+
     final bottomNavItems =
         userRole == 'teacher' ? _teacherBottomNavItems : _studentBottomNavItems;
 
@@ -138,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
             colors: [Color(0xFF0A0F1C), Color(0xFF1A1F2C)],
           ),
         ),
-        child: screens[_currentIndex],
+        child: widget.child,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -158,8 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
+          currentIndex: currentIndex,
+          onTap: (index) => _onNavTap(index, userRole),
           items: bottomNavItems,
           backgroundColor: const Color(0xFF1E2337),
           selectedItemColor: Colors.blueAccent,

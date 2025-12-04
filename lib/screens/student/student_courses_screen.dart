@@ -747,42 +747,72 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: BorderSide(
+        color: Colors.blueGrey.shade700.withOpacity(0.5),
+        width: 1,
+      ),
+    );
+
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Cursos Disponibles'),
-          backgroundColor: const Color(0xFF1A237E),
-          foregroundColor: Colors.white,
-        ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _courses.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay cursos disponibles',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadCourses,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
+      appBar: AppBar(
+        title: const Text('Cursos Disponibles'),
+        backgroundColor: const Color(0xFF1A237E),
+        foregroundColor: Colors.white,
+      ),
+      backgroundColor: const Color(0xFF0A0F1C),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _courses.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No hay cursos disponibles',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadCourses,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.35),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
                           child: TextField(
                             controller: _searchController,
                             onChanged: _searchCourse,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            cursorColor: const Color(0xFF3D5AFE),
                             decoration: InputDecoration(
-                              labelText: "Buscar curso...",
-                              prefixIcon: const Icon(Icons.search),
-                              border: const OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(12)),
+                              hintText: "Buscar curso...",
+                              hintStyle: TextStyle(
+                                color: Colors.blueGrey.shade300,
+                                fontSize: 14,
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: const Color(0xFF111827),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: Colors.blueGrey.shade200,
+                              ),
                               suffixIcon: _searchController.text.isNotEmpty
                                   ? IconButton(
                                       icon: const Icon(Icons.clear),
+                                      color: Colors.blueGrey.shade200,
                                       onPressed: () {
                                         _searchController.clear();
                                         _searchCourse('');
@@ -791,43 +821,53 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
                                   : null,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
-                                vertical: 14,
+                                vertical: 12,
                               ),
+                              enabledBorder: baseBorder,
+                              focusedBorder: baseBorder.copyWith(
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF3D5AFE),
+                                  width: 1.6,
+                                ),
+                              ),
+                              border: baseBorder,
                             ),
                           ),
                         ),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _filteredCourses.length,
-                            itemBuilder: (context, index) {
-                              final course = _filteredCourses[index];
-                              final courseId = course['id'].toString();
-                              final isEnrolling =
-                                  _enrollingCourses.contains(courseId);
-                              final isEnrolled =
-                                  _enrolledCourses[courseId] == true;
-                              final materials =
-                                  _courseMaterials[courseId] ?? [];
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _filteredCourses.length,
+                          itemBuilder: (context, index) {
+                            final course = _filteredCourses[index];
+                            final courseId = course['id'].toString();
+                            final isEnrolling =
+                                _enrollingCourses.contains(courseId);
+                            final isEnrolled =
+                                _enrolledCourses[courseId] == true;
+                            final materials = _courseMaterials[courseId] ?? [];
 
-                              if (isEnrolled) {
-                                return _buildEnrolledCourseCard(
-                                  course,
-                                  courseId,
-                                  materials,
-                                );
-                              } else {
-                                return _buildAvailableCourseCard(
-                                  course,
-                                  courseId,
-                                  isEnrolling,
-                                );
-                              }
-                            },
-                          ),
+                            if (isEnrolled) {
+                              return _buildEnrolledCourseCard(
+                                course,
+                                courseId,
+                                materials,
+                              );
+                            } else {
+                              return _buildAvailableCourseCard(
+                                course,
+                                courseId,
+                                isEnrolling,
+                              );
+                            }
+                          },
                         ),
-                      ],
-                    )));
+                      ),
+                    ],
+                  ),
+                ),
+    );
   }
 }
 

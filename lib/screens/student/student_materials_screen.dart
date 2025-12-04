@@ -3,9 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-
 import '../material_comments_screen.dart';
 import '../teacher/download_helper.dart';
+import 'package:go_router/go_router.dart';
 
 class StudentMaterialsScreen extends StatefulWidget {
   const StudentMaterialsScreen({super.key});
@@ -19,9 +19,17 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
   final Dio _dio = Dio();
 
   List<Map<String, dynamic>> _enrolledCourses = [];
+
   final Map<String, List<Map<String, dynamic>>> _courseMaterials = {};
+
+  List<Map<String, dynamic>> _currentMaterials = [];
+
+  List<Map<String, dynamic>> _filteredMaterials = [];
+
   bool _isLoading = true;
   String? _selectedCourseId;
+
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -31,6 +39,7 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -96,8 +105,16 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
 
       if (!mounted) return;
 
+      final list = List<Map<String, dynamic>>.from(materials);
+
       setState(() {
-        _courseMaterials[courseId] = List<Map<String, dynamic>>.from(materials);
+        _courseMaterials[courseId] = list;
+
+        if (_selectedCourseId == courseId) {
+          _currentMaterials = list;
+          _filteredMaterials = list;
+        }
+
         _isLoading = false;
       });
     } catch (e) {
@@ -105,6 +122,31 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       setState(() => _isLoading = false);
       _showError('Error al cargar materiales: $e');
     }
+  }
+
+  void _searchMaterial(String query) {
+    if (!mounted) return;
+
+    setState(() {
+      if (query.isEmpty) {
+        _filteredMaterials = _currentMaterials;
+      } else {
+        final q = query.toLowerCase();
+        _filteredMaterials = _currentMaterials.where((m) {
+          final title = m['title']?.toString().toLowerCase() ?? '';
+          final type = m['file_type']?.toString().toLowerCase() ?? '';
+          final description =
+              (m['description']?.toString().toLowerCase() ?? '');
+          final typeDesc =
+              _getFileTypeDescription(m['file_type']).toLowerCase();
+
+          return title.contains(q) ||
+              type.contains(q) ||
+              description.contains(q) ||
+              typeDesc.contains(q);
+        }).toList();
+      }
+    });
   }
 
   void _showError(String message) {
@@ -163,6 +205,37 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
       return '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}';
     } catch (e) {
       return 'Fecha inválida';
+    }
+  }
+
+  String _getFileTypeDescription(dynamic fileTypeRaw) {
+    final fileType = (fileTypeRaw ?? '').toString().toLowerCase();
+    switch (fileType) {
+      case 'pdf':
+        return 'Documento PDF';
+      case 'doc':
+      case 'docx':
+        return 'Documento Word';
+      case 'ppt':
+      case 'pptx':
+        return 'Presentación';
+      case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+        return 'Video';
+      case 'image':
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return 'Imagen';
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return 'Archivo comprimido';
+      default:
+        return 'Archivo';
     }
   }
 
@@ -307,11 +380,27 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: BorderSide(
+        color: Colors.blueGrey.shade700.withOpacity(0.5),
+        width: 1,
+      ),
+    );
+
+    final hasAnyMaterials = _selectedCourseId != null &&
+        _courseMaterials[_selectedCourseId] != null &&
+        _courseMaterials[_selectedCourseId]!.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Materiales de Cursos'),
         backgroundColor: const Color(0xFF1A237E),
         foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _isLoading ? null : () => context.go('/student/courses'),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -338,40 +427,138 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
               : Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(16),
-                      color: Colors.grey.shade50,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedCourseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Seleccionar Curso',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                        items: _enrolledCourses.map((enrollment) {
-                          final course = enrollment['courses'];
-                          return DropdownMenuItem<String>(
-                            value: enrollment['course_id'].toString(),
-                            child: Text(
-                              course['title'] ?? 'Curso sin título',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (courseId) {
-                          if (courseId != null) {
-                            if (!mounted) return;
-                            setState(() => _selectedCourseId = courseId);
-                            _loadCourseMaterials(courseId);
-                          }
-                        },
+                          ],
+                        ),
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedCourseId,
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF111827),
+                          iconEnabledColor: Colors.blueGrey.shade100,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Seleccionar curso',
+                            hintStyle: TextStyle(
+                              color: Colors.blueGrey.shade300,
+                              fontSize: 14,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFF111827),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            enabledBorder: baseBorder,
+                            focusedBorder: baseBorder.copyWith(
+                              borderSide: const BorderSide(
+                                color: Color(0xFF3D5AFE),
+                                width: 1.6,
+                              ),
+                            ),
+                            border: baseBorder,
+                          ),
+                          items: _enrolledCourses.map((enrollment) {
+                            final course = enrollment['courses'];
+                            return DropdownMenuItem<String>(
+                              value: enrollment['course_id'].toString(),
+                              child: Text(
+                                course['title'] ?? 'Curso sin título',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (courseId) {
+                            if (courseId != null) {
+                              if (!mounted) return;
+                              setState(() {
+                                _selectedCourseId = courseId;
+                                _isLoading = true;
+                                _searchController.clear();
+                                _currentMaterials = [];
+                                _filteredMaterials = [];
+                              });
+                              _loadCourseMaterials(courseId);
+                            }
+                          },
+                        ),
                       ),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: _searchMaterial,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          cursorColor: const Color(0xFF3D5AFE),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar material...',
+                            hintStyle: TextStyle(
+                              color: Colors.blueGrey.shade300,
+                              fontSize: 14,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFF111827),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: Colors.blueGrey.shade200,
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    color: Colors.blueGrey.shade200,
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      _searchMaterial('');
+                                    },
+                                  )
+                                : null,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            enabledBorder: baseBorder,
+                            focusedBorder: baseBorder.copyWith(
+                              borderSide: const BorderSide(
+                                color: Color(0xFF3D5AFE),
+                                width: 1.6,
+                              ),
+                            ),
+                            border: baseBorder,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Expanded(
-                      child: _selectedCourseId == null ||
-                              _courseMaterials[_selectedCourseId] == null ||
-                              _courseMaterials[_selectedCourseId]!.isEmpty
+                      child: !hasAnyMaterials
                           ? const Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -398,19 +585,51 @@ class _StudentMaterialsScreenState extends State<StudentMaterialsScreen> {
                                 ],
                               ),
                             )
-                          : RefreshIndicator(
-                              onRefresh: () =>
-                                  _loadCourseMaterials(_selectedCourseId!),
-                              child: ListView.builder(
-                                itemCount:
-                                    _courseMaterials[_selectedCourseId]!.length,
-                                itemBuilder: (context, index) {
-                                  final material = _courseMaterials[
-                                      _selectedCourseId]![index];
-                                  return _buildMaterialItem(material);
-                                },
-                              ),
-                            ),
+                          : _filteredMaterials.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        _searchController.text.isNotEmpty
+                                            ? Icons.search_off
+                                            : Icons.library_books,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        _searchController.text.isNotEmpty
+                                            ? 'No se encontraron materiales'
+                                            : 'No hay materiales',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      Text(
+                                        _searchController.text.isNotEmpty
+                                            ? 'Intenta con otra búsqueda'
+                                            : 'El profesor aún no ha subido materiales para este curso',
+                                        textAlign: TextAlign.center,
+                                        style:
+                                            const TextStyle(color: Colors.grey),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : RefreshIndicator(
+                                  onRefresh: () =>
+                                      _loadCourseMaterials(_selectedCourseId!),
+                                  child: ListView.builder(
+                                    itemCount: _filteredMaterials.length,
+                                    itemBuilder: (context, index) {
+                                      final material =
+                                          _filteredMaterials[index];
+                                      return _buildMaterialItem(material);
+                                    },
+                                  ),
+                                ),
                     ),
                   ],
                 ),

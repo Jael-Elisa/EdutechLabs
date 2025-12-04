@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../video_player_screen.dart';
-import 'download_helper.dart';
+import '../teacher/download_helper.dart';
 import '../material_comments_screen.dart';
 
 class TeacherMaterialsScreen extends StatefulWidget {
@@ -891,7 +891,21 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(20),
+      borderSide: BorderSide(
+        color: Colors.blueGrey.shade700.withOpacity(0.5),
+        width: 1,
+      ),
+    );
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mis Materiales'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _isLoading ? null : () => context.go('/teacher/courses'),
+        ),
+      ),
       floatingActionButton: _myCourses.isNotEmpty
           ? FloatingActionButton(
               onPressed: _isUploading
@@ -941,55 +955,130 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
               children: [
                 if (_myCourses.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _selectedCourseId,
-                      decoration: const InputDecoration(
-                        labelText: 'Seleccionar Curso',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      items: _myCourses.map<DropdownMenuItem<String>>((course) {
-                        return DropdownMenuItem<String>(
-                          value: course['id'] as String,
-                          child: Text(
-                            course['title'] as String,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (String? courseId) {
-                        if (courseId != null) {
-                          setState(() {
-                            _selectedCourseId = courseId;
-                            _isLoading = true;
-                            _searchController.clear();
-                          });
-                          _loadMaterials(courseId);
-                        }
-                      },
+                        ],
+                      ),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedCourseId,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF111827),
+                        iconEnabledColor: Colors.blueGrey.shade100,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar curso',
+                          hintStyle: TextStyle(
+                            color: Colors.blueGrey.shade300,
+                            fontSize: 14,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFF111827),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          enabledBorder: baseBorder,
+                          focusedBorder: baseBorder.copyWith(
+                            borderSide: const BorderSide(
+                              color: Color(0xFF3D5AFE),
+                              width: 1.6,
+                            ),
+                          ),
+                          border: baseBorder,
+                        ),
+                        items:
+                            _myCourses.map<DropdownMenuItem<String>>((course) {
+                          return DropdownMenuItem<String>(
+                            value: course['id'] as String,
+                            child: Text(
+                              course['title'] as String,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? courseId) {
+                          if (courseId != null) {
+                            setState(() {
+                              _selectedCourseId = courseId;
+                              _isLoading = true;
+                              _searchController.clear();
+                            });
+                            _loadMaterials(courseId);
+                          }
+                        },
+                      ),
                     ),
                   ),
                 ],
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _searchMaterial,
-                    decoration: InputDecoration(
-                      labelText: 'Buscar material...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                _searchMaterial('');
-                              },
-                            )
-                          : null,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _searchMaterial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      cursorColor: const Color(0xFF3D5AFE),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar material...',
+                        hintStyle: TextStyle(
+                          color: Colors.blueGrey.shade300,
+                          fontSize: 14,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF111827),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.blueGrey.shade200,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                color: Colors.blueGrey.shade200,
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _searchMaterial('');
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        enabledBorder: baseBorder,
+                        focusedBorder: baseBorder.copyWith(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF3D5AFE),
+                            width: 1.6,
+                          ),
+                        ),
+                        border: baseBorder,
+                      ),
                     ),
                   ),
                 ),
@@ -1138,10 +1227,12 @@ class _TeacherMaterialsScreenState extends State<TeacherMaterialsScreen> {
                                                     color: Colors.green,
                                                   ),
                                                   onPressed: () =>
-                                                      _downloadAndSave(
+                                                      _downloadAndOpenFile(
                                                     material['file_url'],
                                                     material['title'] ??
                                                         'archivo',
+                                                    material['file_type'] ??
+                                                        'other',
                                                   ),
                                                 ),
                                               IconButton(
