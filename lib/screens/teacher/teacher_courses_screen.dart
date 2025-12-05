@@ -42,13 +42,30 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   Future<void> _loadCourses() async {
     try {
       final user = _supabase.auth.currentUser;
+      
+      // Validar usuario autenticado
+      if (user == null) {
+        if (!mounted) return;
+        _showErrorSnackBar('Usuario no autenticado. Por favor inicie sesión.');
+        context.go('/login');
+        return;
+      }
+
       final response = await _supabase
           .from('courses')
           .select('*')
-          .eq('teacher_id', user!.id)
+          .eq('teacher_id', user.id)
           .order('created_at', ascending: false);
 
       if (!mounted) return;
+      
+      // Validar respuesta
+      if (response == null) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar('Error al cargar cursos: respuesta nula');
+        return;
+      }
+
       final courses = List<Map<String, dynamic>>.from(response);
 
       setState(() {
@@ -57,19 +74,28 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
         _isLoading = false;
       });
 
+      // Cargar materiales para cada curso
       for (var course in courses) {
         if (!mounted) return;
-        _loadCourseMaterials(course['id']);
+        if (course['id'] != null) {
+          await _loadCourseMaterials(course['id'].toString());
+        }
       }
     } catch (e) {
       if (!mounted) return;
 
       setState(() => _isLoading = false);
-      print('Error loading courses: $e');
+      _showErrorSnackBar('Error al cargar cursos: $e');
     }
   }
 
   Future<void> _loadCourseMaterials(String courseId) async {
+    // Validar courseId
+    if (courseId.isEmpty) {
+      print('Error: courseId vacío');
+      return;
+    }
+
     try {
       final response = await _supabase
           .from('materials')
@@ -78,6 +104,8 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           .order('created_at', ascending: false);
 
       if (!mounted) return;
+
+      if (response == null) return;
 
       setState(() {
         _courseMaterials[courseId] = List<Map<String, dynamic>>.from(response);
@@ -109,6 +137,12 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   Future<void> _deleteCourse(String courseId) async {
+    // Validar courseId
+    if (courseId.isEmpty) {
+      _showErrorSnackBar('ID de curso inválido');
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -136,6 +170,20 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     if (shouldDelete != true) return;
 
     try {
+      // Verificar si el curso existe antes de eliminar
+      final existingCourse = await _supabase
+          .from('courses')
+          .select('id')
+          .eq('id', courseId)
+          .single()
+          .catchError((_) => null);
+
+      if (existingCourse == null) {
+        if (!mounted) return;
+        _showErrorSnackBar('El curso no existe o ya fue eliminado');
+        return;
+      }
+
       await _supabase.from('courses').delete().eq('id', courseId);
       await _loadCourses();
 
@@ -150,19 +198,31 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar curso: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackBar('Error al eliminar curso: $e');
     }
   }
 
   Future<void> _openMaterial(Map<String, dynamic> material) async {
-    final String fileUrl = material['file_url'];
-    final String title = material['title'] ?? 'Material';
-    final String fileType = material['file_type'];
+    // Validar material
+    if (material.isEmpty) {
+      _showErrorSnackBar('Material inválido');
+      return;
+    }
+
+    final String? fileUrl = material['file_url'];
+    final String title = material['title']?.toString() ?? 'Material';
+    final String? fileType = material['file_type'];
+
+    // Validar URL y tipo de archivo
+    if (fileUrl == null || fileUrl.isEmpty) {
+      _showErrorSnackBar('URL del material no disponible');
+      return;
+    }
+
+    if (fileType == null || fileType.isEmpty) {
+      _showErrorSnackBar('Tipo de archivo no especificado');
+      return;
+    }
 
     if (fileType == 'link') {
       await _openLink(fileUrl);
@@ -171,6 +231,13 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
     if (fileType == 'video') {
       if (!mounted) return;
+      
+      // Validar URL de video
+      if (!_isValidUrl(fileUrl)) {
+        _showErrorSnackBar('URL de video inválida');
+        return;
+      }
+      
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -225,22 +292,30 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   Future<void> _openLink(String url) async {
+    // Validar URL
+    if (!_isValidUrl(url)) {
+      _showErrorSnackBar('URL inválida');
+      return;
+    }
+
     final uri = Uri.parse(url);
     if (!await launchUrl(uri)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo abrir: $url')),
-      );
+      _showErrorSnackBar('No se pudo abrir: $url');
     }
   }
 
   Future<void> _viewInBrowser(String url) async {
+    // Validar URL
+    if (!_isValidUrl(url)) {
+      _showErrorSnackBar('URL inválida');
+      return;
+    }
+
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir en el navegador')),
-      );
+      _showErrorSnackBar('No se pudo abrir en el navegador');
     }
   }
 
@@ -249,6 +324,16 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     String fileName,
     String fileType,
   ) async {
+    // Validaciones de entrada
+    if (!_isValidUrl(url)) {
+      _showErrorSnackBar('URL de descarga inválida');
+      return;
+    }
+
+    if (fileName.isEmpty) {
+      fileName = 'archivo_desconocido';
+    }
+
     try {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,6 +350,12 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
           url,
           options: Options(responseType: ResponseType.bytes),
         );
+        
+        // Validar respuesta de descarga
+        if (response.data == null || response.data!.isEmpty) {
+          throw Exception('Archivo vacío o no disponible');
+        }
+        
         bytes = Uint8List.fromList(response.data!);
       } catch (e) {
         throw Exception('No se pudieron descargar los bytes: $e');
@@ -272,22 +363,23 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
 
       await DownloadHelper.downloadFile(
         bytes: bytes,
-        fileName: fileName,
+        fileName: _cleanFileName(fileName),
         mimeType: _getMimeType(fileType),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al descargar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackBar('Error al descargar: $e');
     }
   }
 
   Future<void> _deleteMaterial(
       String materialId, String courseId, String fileUrl) async {
+    // Validar IDs
+    if (materialId.isEmpty || courseId.isEmpty) {
+      _showErrorSnackBar('ID de material o curso inválido');
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -314,6 +406,20 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     if (shouldDelete != true) return;
 
     try {
+      // Verificar si el material existe antes de eliminar
+      final existingMaterial = await _supabase
+          .from('materials')
+          .select('id')
+          .eq('id', materialId)
+          .single()
+          .catchError((_) => null);
+
+      if (existingMaterial == null) {
+        if (!mounted) return;
+        _showErrorSnackBar('El material no existe o ya fue eliminado');
+        return;
+      }
+
       await _supabase.from('materials').delete().eq('id', materialId);
       await _loadCourseMaterials(courseId);
 
@@ -328,26 +434,33 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackBar('Error al eliminar: $e');
     }
   }
 
   void _navigateToCourseMaterials(Map<String, dynamic> course) {
+    // Validar curso
+    if (course.isEmpty || course['id'] == null) {
+      _showErrorSnackBar('Curso inválido para navegar a materiales');
+      return;
+    }
+    
     context.go(
       '/teacher/materials',
       extra: {
         'courseId': course['id'] as String,
-        'courseTitle': course['title'],
+        'courseTitle': course['title'] ?? 'Sin título',
       },
     );
   }
 
   void _navigateToCourseComments(Map<String, dynamic> course) {
+    // Validar curso
+    if (course.isEmpty) {
+      _showErrorSnackBar('Curso inválido para navegar a comentarios');
+      return;
+    }
+    
     context.push('/teacher/comments', extra: course);
   }
 
@@ -367,10 +480,14 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
       case 2:
         context.go('/profile');
         break;
+      default:
+        break;
     }
   }
 
   String _cleanFileName(String fileName) {
+    if (fileName.isEmpty) return 'archivo';
+    
     final cleaned = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     if (cleaned.length > 100) {
       final extension = cleaned.split('.').last;
@@ -381,22 +498,40 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   String _getMimeType(String fileType) {
+    if (fileType.isEmpty) return 'application/octet-stream';
+    
     switch (fileType.toLowerCase()) {
       case 'pdf':
         return 'application/pdf';
       case 'image':
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
         return 'image/jpeg';
       case 'document':
+      case 'doc':
+      case 'docx':
         return 'application/msword';
       case 'text':
+      case 'txt':
         return 'text/plain';
       case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
         return 'video/mp4';
       case 'audio':
+      case 'mp3':
+      case 'wav':
         return 'audio/mpeg';
       case 'spreadsheet':
+      case 'xls':
+      case 'xlsx':
         return 'application/vnd.ms-excel';
       case 'presentation':
+      case 'ppt':
+      case 'pptx':
         return 'application/vnd.ms-powerpoint';
       default:
         return 'application/octet-stream';
@@ -404,20 +539,35 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   IconData _getFileIcon(String fileType) {
-    switch (fileType) {
+    if (fileType.isEmpty) return Icons.insert_drive_file;
+    
+    switch (fileType.toLowerCase()) {
       case 'pdf':
         return Icons.picture_as_pdf;
       case 'document':
+      case 'doc':
+      case 'docx':
         return Icons.article;
       case 'text':
+      case 'txt':
         return Icons.text_fields;
       case 'image':
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
         return Icons.image;
       case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
         return Icons.video_library;
       case 'audio':
+      case 'mp3':
+      case 'wav':
         return Icons.audiotrack;
       case 'link':
+      case 'url':
         return Icons.link;
       default:
         return Icons.insert_drive_file;
@@ -425,20 +575,35 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   Color _getFileColor(String fileType) {
-    switch (fileType) {
+    if (fileType.isEmpty) return Colors.grey;
+    
+    switch (fileType.toLowerCase()) {
       case 'pdf':
         return Colors.red;
       case 'document':
+      case 'doc':
+      case 'docx':
         return Colors.blue.shade700;
       case 'text':
+      case 'txt':
         return Colors.blue.shade500;
       case 'image':
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
         return Colors.purple;
       case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
         return Colors.pink;
       case 'audio':
+      case 'mp3':
+      case 'wav':
         return Colors.teal;
       case 'link':
+      case 'url':
         return Colors.amber;
       default:
         return Colors.grey;
@@ -446,39 +611,87 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
   }
 
   String _getFileTypeDescription(String fileType) {
-    switch (fileType) {
+    if (fileType.isEmpty) return 'Archivo';
+    
+    switch (fileType.toLowerCase()) {
       case 'pdf':
         return 'Documento PDF';
       case 'document':
+      case 'doc':
+      case 'docx':
         return 'Documento Word';
       case 'text':
+      case 'txt':
         return 'Archivo de texto';
       case 'image':
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
         return 'Imagen';
       case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
         return 'Video';
       case 'audio':
+      case 'mp3':
+      case 'wav':
         return 'Audio';
       case 'link':
+      case 'url':
         return 'Enlace externo';
       default:
         return 'Archivo';
     }
   }
 
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+  String _formatFileSize(dynamic bytes) {
+    try {
+      final size = bytes is int ? bytes : int.tryParse(bytes.toString()) ?? 0;
+      
+      if (size < 1024) return '$bytes B';
+      if (size < 1048576) return '${(size / 1024).toStringAsFixed(1)} KB';
+      return '${(size / 1048576).toStringAsFixed(1)} MB';
+    } catch (e) {
+      return 'Tamaño desconocido';
+    }
   }
 
-  String _formatDate(String dateString) {
+  String _formatDate(dynamic dateString) {
     try {
-      final date = DateTime.parse(dateString);
+      if (dateString == null) return 'Fecha desconocida';
+      
+      final date = DateTime.parse(dateString.toString());
       return '${date.day}/${date.month}/${date.year}';
     } catch (e) {
       return 'Fecha desconocida';
     }
+  }
+
+  // Método auxiliar para validar URLs
+  bool _isValidUrl(String url) {
+    if (url.isEmpty) return false;
+    
+    try {
+      final uri = Uri.parse(url);
+      return uri.isAbsolute;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Método auxiliar para mostrar errores
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -490,6 +703,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
         width: 1,
       ),
     );
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mis Cursos'),
@@ -620,7 +834,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                               itemCount: _filteredCourses.length,
                               itemBuilder: (context, index) {
                                 final course = _filteredCourses[index];
-                                final courseId = course['id'];
+                                final courseId = course['id']?.toString() ?? '';
                                 final materials =
                                     _courseMaterials[courseId] ?? [];
                                 final isExpanded =
@@ -641,7 +855,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                           color: Colors.blue),
                                     ),
                                     title: Text(
-                                      course['title'] ?? 'Sin título',
+                                      course['title']?.toString() ?? 'Sin título',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
@@ -652,7 +866,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          course['category'] ?? 'Sin categoría',
+                                          course['category']?.toString() ?? 'Sin categoría',
                                           style: TextStyle(
                                             color: Colors.blue.shade700,
                                             fontWeight: FontWeight.w500,
@@ -660,7 +874,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          course['description'] ??
+                                          course['description']?.toString() ??
                                               'Sin descripción',
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
@@ -708,23 +922,25 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                         )
                                       else
                                         ...materials.map((material) {
+                                          final materialId = material['id']?.toString() ?? '';
+                                          final fileType = material['file_type']?.toString() ?? '';
+                                          final fileUrl = material['file_url']?.toString() ?? '';
+                                          final title = material['title']?.toString() ?? 'Sin título';
+                                          
                                           return Material(
                                             color: Colors.transparent,
                                             child: ListTile(
                                               leading: Icon(
-                                                _getFileIcon(
-                                                    material['file_type']),
-                                                color: _getFileColor(
-                                                    material['file_type']),
+                                                _getFileIcon(fileType),
+                                                color: _getFileColor(fileType),
                                               ),
                                               title: Text(
-                                                material['title'] ??
-                                                    'Sin título',
+                                                title,
                                                 style: const TextStyle(
                                                     fontSize: 14),
                                               ),
                                               subtitle: Text(
-                                                '${_getFileTypeDescription(material['file_type'])} • ${_formatDate(material['created_at'] ?? '')}',
+                                                '${_getFileTypeDescription(fileType)} • ${_formatDate(material['created_at'])}',
                                                 style: const TextStyle(
                                                     fontSize: 12),
                                               ),
@@ -733,11 +949,9 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                 children: [
                                                   IconButton(
                                                     icon: Icon(
-                                                      material['file_type'] ==
-                                                              'video'
+                                                      fileType == 'video'
                                                           ? Icons.play_arrow
-                                                          : material['file_type'] ==
-                                                                  'link'
+                                                          : fileType == 'link'
                                                               ? Icons
                                                                   .open_in_new
                                                               : Icons
@@ -748,8 +962,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                     onPressed: () =>
                                                         _openMaterial(material),
                                                   ),
-                                                  if (material['file_type'] !=
-                                                      'link')
+                                                  if (fileType != 'link' && fileUrl.isNotEmpty)
                                                     IconButton(
                                                       icon: const Icon(
                                                         Icons.download,
@@ -758,10 +971,9 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                       ),
                                                       onPressed: () =>
                                                           _downloadAndSave(
-                                                        material['file_url'],
-                                                        material['title'] ??
-                                                            'archivo',
-                                                        material['file_type'],
+                                                        fileUrl,
+                                                        title,
+                                                        fileType,
                                                       ),
                                                     ),
                                                   IconButton(
@@ -772,9 +984,9 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                                     ),
                                                     onPressed: () =>
                                                         _deleteMaterial(
-                                                      material['id'],
+                                                      materialId,
                                                       courseId,
-                                                      material['file_url'],
+                                                      fileUrl,
                                                     ),
                                                   ),
                                                 ],
@@ -818,7 +1030,7 @@ class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
                                               icon: const Icon(Icons.more_vert),
                                               onSelected: (value) {
                                                 if (value == 'delete') {
-                                                  _deleteCourse(course['id']);
+                                                  _deleteCourse(courseId);
                                                 }
                                               },
                                               itemBuilder: (context) => [

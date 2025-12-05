@@ -59,7 +59,7 @@ dependencies:
   permission_handler: ^10.4.3
   path_provider: ^2.1.1
   dio: ^5.4.0
-
+  image_picker: ^1.0.4
   file_saver: ^0.1.1
 
   # PDF Viewer (opcional - descomenta si lo necesitas)
@@ -116,4 +116,4 @@ flutter:
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  # see https://flutter.dev/to/font-from-package       
